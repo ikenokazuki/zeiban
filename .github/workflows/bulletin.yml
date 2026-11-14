@@ -1,0 +1,45 @@
+name: bulletin
+
+on:
+  schedule:
+    - cron: '17 4 * * 4'   # 毎週木曜 04:17 UTC（日本時間 13:17）。公報は水曜付けで出る
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: watch             # 版の見張りと同じ組にして、push が重ならないようにする
+  cancel-in-progress: false
+
+jobs:
+  bulletin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: pdftotext
+        run: sudo apt-get install -y --no-install-recommends poppler-utils
+      - name: 抜き出しの試験
+        run: python3 hts/bulletin.py demo
+      - name: 見張り
+        id: w
+        run: python3 hts/bulletin.py
+      - name: 保存
+        if: steps.w.outputs.new != ''
+        env:
+          NEW: ${{ steps.w.outputs.new }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add bulletins
+          git commit -m "bulletin: ${NEW}"
+          git push
+      - name: 知らせ
+        if: steps.w.outputs.notices != '' && steps.w.outputs.notices != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ steps.w.outputs.new }}
+        run: |
+          gh issue create --title "公報 ${NEW}: 判例の取り消し・変更の告示" --body-file summary.md

@@ -1,0 +1,73 @@
+{
+ "vol": 60,
+ "no": 28,
+ "date": "2026-09-16",
+ "page": "/document/bulletins/customs-bulletin-weekly-vol-60-september-16-2026-no-28",
+ "pdf": "/sites/default/files/2026-09/26_0916_vol_60_no_28.pdf",
+ "pdf_sha256": "ef53bcaa3b831301b5b91aefbfd402da028e87e02eba8c4af354548ff72bf629",
+ "notices": [
+  {
+   "kind": "final",
+   "acts": [
+    "modification"
+   ],
+   "expected": 2,
+   "title": "MODIFICATION OF TWO RULING LETTERS AND REVOCATION OF TREATMENT RELATING TO THE TARIFF CLASSIFICATION OF TWO HINDERED AMINE LIGHT STABILIZERS",
+   "classification": true,
+   "effective": "2026-11-15",
+   "comments_by": "",
+   "rulings": [
+    {
+     "n": "HQ 962731",
+     "act": "modified",
+     "date": "2001-10-22"
+    },
+    {
+     "n": "NY N063923",
+     "act": "modified",
+     "date": "2009-06-22"
+    }
+   ],
+   "new_rulings": [
+    "HQ H314018"
+   ],
+   "holding_codes": [
+    "3812.39.60"
+   ]
+  },
+  {
+   "kind": "final",
+   "acts": [
+    "revocation"
+   ],
+   "expected": 3,
+   "title": "REVOCATION OF THREE RULING LETTERS AND REVOCATION OF TREATMENT RELATING TO THE TARIFF CLASSIFICATION OF CHILD-SIZED PORTABLE TOILETS",
+   "classification": true,
+   "effective": "2026-11-15",
+   "comments_by": "",
+   "rulings": [
+    {
+     "n": "NY L83440",
+     "act": "revoked",
+     "date": "2005-04-18"
+    },
+    {
+     "n": "NY M83046",
+     "act": "revoked",
+     "date": "2006-05-16"
+    },
+    {
+     "n": "NY N319574",
+     "act": "revoked",
+     "date": "2021-06-02"
+    }
+   ],
+   "new_rulings": [
+    "HQ H336925"
+   ],
+   "holding_codes": [
+    "3924.90.56"
+   ]
+  }
+ ]
+}

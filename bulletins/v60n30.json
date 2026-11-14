@@ -1,0 +1,63 @@
+{
+ "vol": 60,
+ "no": 30,
+ "date": "2026-09-30",
+ "page": "/document/bulletins/customs-bulletin-weekly-vol-60-september-30-2026-no-30",
+ "pdf": "/sites/default/files/2026-09/26_0930_vol_60_no_30.pdf",
+ "pdf_sha256": "048617e5e5691928396cf6fe87551a8e874a7afcc3a88bf7d4c0d3c913cd6898",
+ "notices": [
+  {
+   "kind": "final",
+   "acts": [
+    "revocation"
+   ],
+   "expected": 2,
+   "title": "REVOCATION OF TWO RULING LETTERS AND REVOCATION OF TREATMENT RELATING TO THE TARIFF CLASSIFICATION OF A “DOVETAIL FIXTURE” AND A “DOVETAIL JIG”",
+   "classification": true,
+   "effective": "2026-11-29",
+   "comments_by": "",
+   "rulings": [
+    {
+     "n": "NY N023537",
+     "act": "revoked",
+     "date": "2008-02-26"
+    },
+    {
+     "n": "NY R04119",
+     "act": "revoked",
+     "date": "2006-06-22"
+    }
+   ],
+   "new_rulings": [
+    "HQ H314991"
+   ],
+   "holding_codes": [
+    "8466.10.01"
+   ]
+  },
+  {
+   "kind": "final",
+   "acts": [
+    "modification"
+   ],
+   "expected": 1,
+   "title": "MODIFICATION OF ONE RULING LETTER AND REVOCATION OF TREATMENT RELATING TO THE TARIFF CLASSIFICATION OF AN ACCESSORY KIT FOR WOODWORKING JIGS",
+   "classification": true,
+   "effective": "2026-11-29",
+   "comments_by": "",
+   "rulings": [
+    {
+     "n": "NY N224420",
+     "act": "modified",
+     "date": ""
+    }
+   ],
+   "new_rulings": [
+    "HQ H349848"
+   ],
+   "holding_codes": [
+    "8466.10.01"
+   ]
+  }
+ ]
+}

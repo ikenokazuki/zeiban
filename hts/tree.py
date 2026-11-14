@@ -9,7 +9,7 @@ from pathlib import Path
 NON_PRODUCT = ('98', '99')
 RELEASES_URL = 'https://hts.usitc.gov/reststop/releaseList'
 EXPORT_URL = 'https://hts.usitc.gov/reststop/exportList?from=0101&to=9999&format=JSON&styles=false'
-UA = {'User-Agent': 'zeiban/0.1 (+https://github.com/ikenokazuki/zeiban)'}
+UA = {'User-Agent': 'zeiban/0.1'}
 
 
 def digits(s):
