@@ -41,4 +41,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NEW: ${{ steps.w.outputs.new }}
           KIND: ${{ steps.w.outputs.kind }}
-        run: gh issue create --title "関税表の改訂 ${NEW}: 商品の行が変わった（型 ${KIND}）" --body-file summary.md
+        run: |
+          gh issue create --title "関税表の改訂 ${NEW}: 商品の行が変わった（型 ${KIND}）" --body-file summary.md
