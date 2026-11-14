@@ -493,5 +493,14 @@
   "sha256_json": "e586584a9495cd29bbaac1f891f6dbae9992c6df2e52936c81d1467c8aa5706e",
   "leaves": 19926,
   "kind": "A"
+ },
+ {
+  "name": "2026HTSRev23",
+  "date": "2026-11-10",
+  "file": "2026HTSRev23.json.gz",
+  "sha256": "46a53e3a33948120f7c8c488ed01d6a12051c84fbee2e31086eac313db491ad1",
+  "source": "USITC reststop/exportList",
+  "leaves": 19926,
+  "kind": "A"
  }
 ]
