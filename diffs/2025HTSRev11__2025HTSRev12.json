@@ -1,0 +1,23 @@
+{
+ "old": "2025HTSRev11",
+ "new": "2025HTSRev12",
+ "n_leaves_old": 19710,
+ "n_leaves_new": 19710,
+ "born": [],
+ "gone": [],
+ "text": [
+  "0303890046",
+  "0306110010",
+  "0309901030"
+ ],
+ "path": [],
+ "kinds": {},
+ "remap": {},
+ "node_text_changed_by_digits": {
+  "10": 3
+ },
+ "share_class_changed": 0.0,
+ "share_any_changed": 0.00015220700152207003,
+ "kind": "B",
+ "missed": []
+}

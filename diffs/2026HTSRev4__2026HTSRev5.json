@@ -1,0 +1,25 @@
+{
+ "old": "2026HTSRev4",
+ "new": "2026HTSRev5",
+ "n_leaves_old": 19833,
+ "n_leaves_new": 19833,
+ "born": [],
+ "gone": [],
+ "text": [],
+ "path": [
+  "3004909261",
+  "3004909262",
+  "3004909263",
+  "3004909264",
+  "3004909265",
+  "3004909266",
+  "3004909267"
+ ],
+ "kinds": {},
+ "remap": {},
+ "node_text_changed_by_digits": {},
+ "share_class_changed": 0.0,
+ "share_any_changed": 0.0003529471083547623,
+ "kind": "B",
+ "missed": []
+}

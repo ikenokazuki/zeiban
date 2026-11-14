@@ -1,0 +1,497 @@
+[
+ {
+  "name": "2025HTSBasic",
+  "date": "2024-12-31",
+  "file": "2025HTSBasic.json.gz",
+  "sha256": "ac2660b1c54b282572428a494292761abe7b37ed756a03a3d4c7ae3c62af34b3",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_basic.json.gz",
+  "leaves": 19708
+ },
+ {
+  "name": "2025HTSRev1",
+  "date": "2025-02-05",
+  "file": "2025HTSRev1.json.gz",
+  "sha256": "4525bec7e46b1fc4e742a3fa5ff689fd7ca884b7e1b38c60184535caaa6d86f2",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_1.json.gz",
+  "leaves": 19710,
+  "kind": "B"
+ },
+ {
+  "name": "2025HTSRev2",
+  "date": "2025-02-12",
+  "file": "2025HTSRev2.json.gz",
+  "sha256": "8d5789495c04adbd8aef2bd0fb6f6ed26a97558f7a451840244588d10ec70c5f",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_2.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev3",
+  "date": "2025-03-06",
+  "file": "2025HTSRev3.json.gz",
+  "sha256": "1861baca002a97d5dab54b1a52ac962cc8a712a1abc810b511a7a95cdab731f7",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_3.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev4",
+  "date": "2025-03-11",
+  "file": "2025HTSRev4.json.gz",
+  "sha256": "a3625a73311b56df3f6934cdbf24911780c03c6ccecfa56f6b3a94f88ce31d2f",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_4.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev5",
+  "date": "2025-03-14",
+  "file": "2025HTSRev5.json.gz",
+  "sha256": "71821222539bc3caddbc8e5eb6ddf2ed43251b6d95a1acbaaf7bd80bedfab373",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_5.json.gz",
+  "leaves": 19710,
+  "kind": "B"
+ },
+ {
+  "name": "2025HTSRev6",
+  "date": "2025-04-03",
+  "file": "2025HTSRev6.json.gz",
+  "sha256": "c3ea85095d3eb8b19fc9ba2bf2ac6c30d9046a671bc8a3bac4673851a4d8c17a",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_6.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev7",
+  "date": "2025-04-04",
+  "file": "2025HTSRev7.json.gz",
+  "sha256": "6541cb41d1c1434c2af28e5c43465152328629c14b238db6611f09526650e14f",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_7.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev8",
+  "date": "2025-04-09",
+  "file": "2025HTSRev8.json.gz",
+  "sha256": "ca54e8040aaf314fe40b49dd2bb906176f56c383214231c5703ed696ea8a26cc",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_8.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev9",
+  "date": "2025-04-11",
+  "file": "2025HTSRev9.json.gz",
+  "sha256": "536caaf9d1e53dde1867b0b6996beae7e7b1adde7368d3312c03ef04b68371c8",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_9.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev10",
+  "date": "2025-04-15",
+  "file": "2025HTSRev10.json.gz",
+  "sha256": "acaf35e1a89059772a58dd802f0e8fb31d9390068291d0824fc4b9f8dfc69f37",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_10.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev11",
+  "date": "2025-05-02",
+  "file": "2025HTSRev11.json.gz",
+  "sha256": "623c15d020001fa0f3b26927fd5844ab3b4d6b91609d1c544526109273d13ebd",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_11.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev12",
+  "date": "2025-05-13",
+  "file": "2025HTSRev12.json.gz",
+  "sha256": "91dfd0d0046b5a8d6a0bcf3be6e236987130ca86b3eb2e0b6fca031d57e1a556",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_12.json.gz",
+  "leaves": 19710,
+  "kind": "B"
+ },
+ {
+  "name": "2025HTSRev13",
+  "date": "2025-05-16",
+  "file": "2025HTSRev13.json.gz",
+  "sha256": "74d0bb178e76b942b147e852ce96f2a59a98ed27e0065699b8aa823bc327c514",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_13.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev14",
+  "date": "2025-06-06",
+  "file": "2025HTSRev14.json.gz",
+  "sha256": "452eb21954dbf5749198a720c25b63c6c99f3fe8a271727af7b1484ae45b3d74",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_14.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev15",
+  "date": "2025-06-20",
+  "file": "2025HTSRev15.json.gz",
+  "sha256": "be196654a2b1ad34a23a4fe86d474e4d08e7eb1c681f4b294d96ab1bc4a6f5df",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_15.json.gz",
+  "leaves": 19710,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev16",
+  "date": "2025-07-01",
+  "file": "2025HTSRev16.json.gz",
+  "sha256": "2f2b0623f0b2c6e4f5aef015083d962efea891eb9465839d7346ea185b7274af",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_16.json.gz",
+  "leaves": 19745,
+  "kind": "C"
+ },
+ {
+  "name": "2025HTSRev17",
+  "date": "2025-08-01",
+  "file": "2025HTSRev17.json.gz",
+  "sha256": "c216c0962ed308d8d3d6c8403c034b0ea73ff0b8fcfe0efc0b1b7724b964269d",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_17.json.gz",
+  "leaves": 19745,
+  "kind": "B"
+ },
+ {
+  "name": "2025HTSRev18",
+  "date": "2025-08-07",
+  "file": "2025HTSRev18.json.gz",
+  "sha256": "b849b479bc261fe618c279ad4c80781360d1dbc10d1211798bb7265e2ea72935",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_18.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev19",
+  "date": "2025-08-18",
+  "file": "2025HTSRev19.json.gz",
+  "sha256": "0ede3669d279963a59be8d5b0904a4a558d894ad492b2f058ed8d2ee0a95781a",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_19.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev20",
+  "date": "2025-08-27",
+  "file": "2025HTSRev20.json.gz",
+  "sha256": "2d49a15fb6100121b80c0cfb8e5d4eb0250bd10f3fdc0fbf07f413efcbd422d5",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_20.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev21",
+  "date": "2025-08-29",
+  "file": "2025HTSRev21.json.gz",
+  "sha256": "f5b6af86d32a02ffb88ce4b399fe868737167531620b91c9898ef854915c93ea",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_21.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev22",
+  "date": "2025-09-09",
+  "file": "2025HTSRev22.json.gz",
+  "sha256": "109442a6c8cfa2f6ff3c623693ab3e1405eeb708d6850db453495fcc9612f36b",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_22.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev23",
+  "date": "2025-09-16",
+  "file": "2025HTSRev23.json.gz",
+  "sha256": "3b3dd0fd0f13953530e9a667cad039a6866be8c99b21857f3fbccc2f25a4d8e7",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_23.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev24",
+  "date": "2025-09-26",
+  "file": "2025HTSRev24.json.gz",
+  "sha256": "e9c408d81f2b30b4b8656a2f74512ea5f52d619f814bd93398e5be8c6610a0c3",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_24.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev25",
+  "date": "2025-10-10",
+  "file": "2025HTSRev25.json.gz",
+  "sha256": "32b52e2d7242f3ced9543c1c21ec863fb682fcc5d6b3e7f5bcb1b6f436f3ea03",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_25.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev26",
+  "date": "2025-10-31",
+  "file": "2025HTSRev26.json.gz",
+  "sha256": "b79e3fc1f9bf9baab7cb1b76acd1569952018bf53826c7c42e255da1d4d14bce",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_26.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev27",
+  "date": "2025-11-07",
+  "file": "2025HTSRev27.json.gz",
+  "sha256": "edad6ec42e4861619c417b8467e2b30eff80ad81ac3098808d76adbcc9066d91",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_27.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev28",
+  "date": "2025-11-10",
+  "file": "2025HTSRev28.json.gz",
+  "sha256": "6970ba527d9b19057bd3458e52a93e0e37b7479d26a5fb1425ab9e66035e078f",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_28.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev29",
+  "date": "2025-11-17",
+  "file": "2025HTSRev29.json.gz",
+  "sha256": "def623a1044310646fe511bad25a543713b15d6d2ca768645ee91dd1d621afb9",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_29.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev30",
+  "date": "2025-11-21",
+  "file": "2025HTSRev30.json.gz",
+  "sha256": "935c21aedface4033e223c2246493060a5e71729fb182d444d73e8aced571308",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_30.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev31",
+  "date": "2025-11-28",
+  "file": "2025HTSRev31.json.gz",
+  "sha256": "fe8167cfff72ef654ba3de9b604900d4be2af5fdab3933400d3c8e2b2b364e35",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_31.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2025HTSRev32",
+  "date": "2025-12-05",
+  "file": "2025HTSRev32.json.gz",
+  "sha256": "b9d10b55149253e3606a26a41b6a4217450c6de1add19a141ef6d5b7be81c8e4",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2025_rev_32.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSBasic",
+  "date": "2025-12-31",
+  "file": "2026HTSBasic.json.gz",
+  "sha256": "c0cf71a76d6ddcd6ea768d785fe91a22f49362f7fa9ffcfc2b6687fa1c3ad7c1",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_basic.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev1",
+  "date": "2026-01-16",
+  "file": "2026HTSRev1.json.gz",
+  "sha256": "0db9c2c6eff821e882ee496dc63cb29a4ee5a5666ce4e3813478d56c6fb5a59a",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_1.json.gz",
+  "leaves": 19745,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev2",
+  "date": "2026-01-30",
+  "file": "2026HTSRev2.json.gz",
+  "sha256": "1603f90bba86b311ee8fe8b35ec16ab58284180cbc01fa6f3d5803d4022e2770",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_2.json.gz",
+  "leaves": 19832,
+  "kind": "C"
+ },
+ {
+  "name": "2026HTSRev3",
+  "date": "2026-02-12",
+  "file": "2026HTSRev3.json.gz",
+  "sha256": "e878e7bf8f2e85639029d01e117bfb40948a3cdfa33b460083c44ac455573688",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_3.json.gz",
+  "leaves": 19833,
+  "kind": "B"
+ },
+ {
+  "name": "2026HTSRev4",
+  "date": "2026-02-25",
+  "file": "2026HTSRev4.json.gz",
+  "sha256": "359be1fb2c039b0864bf864805f667cc4ada1cc90ddad02d971e255f8afa74ce",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_4.json.gz",
+  "leaves": 19833,
+  "kind": "B"
+ },
+ {
+  "name": "2026HTSRev5",
+  "date": "2026-04-08",
+  "file": "2026HTSRev5.json.gz",
+  "sha256": "86fa5bfd023a23f752f6f8a60c81969e255ca1e002dbb5e43ae1e07691d58add",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_5.json.gz",
+  "leaves": 19833,
+  "kind": "B"
+ },
+ {
+  "name": "2026HTSRev6",
+  "date": "2026-04-23",
+  "file": "2026HTSRev6.json.gz",
+  "sha256": "ab17973d6d0c488edd212f904f00eb939448c2f1892ee2929f73e27d3c4b6e09",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_6.json.gz",
+  "leaves": 19833,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev7",
+  "date": "2026-04-29",
+  "file": "2026HTSRev7.json.gz",
+  "sha256": "32c65bd030d27e142e5614faafccd60fd3aee104875d418a345964d595589929",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_7.json.gz",
+  "leaves": 19833,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev8",
+  "date": "2026-05-22",
+  "file": "2026HTSRev8.json.gz",
+  "sha256": "b4befc43f068ccc3335be67e0f0448efc819b74eaab0253f20e82f2db1f3a75d",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_8.json.gz",
+  "leaves": 19833,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev9",
+  "date": "2026-05-28",
+  "file": "2026HTSRev9.json.gz",
+  "sha256": "d21284a0d08542bbf106b712c3f4b7a5338e93abd9de6c27b5ec6ea82f7ab313",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_9.json.gz",
+  "leaves": 19833,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev10",
+  "date": "2026-06-08",
+  "file": "2026HTSRev10.json.gz",
+  "sha256": "369170d51a419688d5e9e42c3eb91b6fdb861c3729a931b03277baab3e236b80",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_10.json.gz",
+  "leaves": 19833,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev11",
+  "date": "2026-07-01",
+  "file": "2026HTSRev11.json.gz",
+  "sha256": "e3dfb6efe3e06332df5580b079242ad2c651be658b204fe4713a70dc863ba811",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_11.json.gz",
+  "leaves": 19926,
+  "kind": "C"
+ },
+ {
+  "name": "2026HTSRev12",
+  "date": "2026-07-21",
+  "file": "2026HTSRev12.json.gz",
+  "sha256": "7228358c06973566809e54eb4bb788948c4252e9b07ed486fdbb6a6146fbeb4a",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_12.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev13",
+  "date": "2026-07-28",
+  "file": "2026HTSRev13.json.gz",
+  "sha256": "2ccdbcdf625e5983c0867fa5876496160a1b865745e7f27b579beb475b984f27",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_13.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev15",
+  "date": "2026-08-03",
+  "file": "2026HTSRev15.json.gz",
+  "sha256": "6d25c48cdd5a3e8777d7588dd2a266b5af6b87b7e6ea736a7d696d8487d80b04",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_15.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev16",
+  "date": "2026-08-14",
+  "file": "2026HTSRev16.json.gz",
+  "sha256": "55549314bc75a4db6ae43c2722e54f47aab8f5e66381d00429d818b08f0d456c",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_16.json.gz",
+  "leaves": 19926,
+  "kind": "B"
+ },
+ {
+  "name": "2026HTSRev17",
+  "date": "2026-08-24",
+  "file": "2026HTSRev17.json.gz",
+  "sha256": "7a7d38bfcd6081039886f3de5be0128b998a98dce283a7a3f079528c24882a70",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_17.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev18",
+  "date": "2026-09-02",
+  "file": "2026HTSRev18.json.gz",
+  "sha256": "6c72d7d722f84df902de30e4cd88d20d22b55693fa279d4f34431402f061aa7a",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_18.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev19",
+  "date": "2026-09-15",
+  "file": "2026HTSRev19.json.gz",
+  "sha256": "2e7ecec1394e38b763c0757417bc7431bbb06844ef86d25389f1d8433db88337",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_19.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev20",
+  "date": "2026-09-28",
+  "file": "2026HTSRev20.json.gz",
+  "sha256": "1faa54aecd071c70ae72f83055da73e8410e2d6698b3359f894a52ecd8baf7f7",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_20.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev21",
+  "date": "2026-10-09",
+  "file": "2026HTSRev21.json.gz",
+  "sha256": "8a51e771c15d9d4b851b1cdc1e8e71d4ee49abb0fef3ab777f6f10ccb6027f6a",
+  "source": "Budget-Lab-Yale/tariff-rate-tracker@a5ddf68dfa691c2c80fe5c4adc94e5fcae7dcb79 data/hts_archives/hts_2026_rev_21.json.gz",
+  "leaves": 19926,
+  "kind": "A"
+ },
+ {
+  "name": "2026HTSRev22",
+  "date": "2026-10-30",
+  "file": "2026HTSRev22.json.gz",
+  "sha256": "bdd034b7244c8c60df5262f1abbc42b37d16b7f5f9481fc7b5c5cebe822b61d4",
+  "source": "USITC reststop/exportList",
+  "sha256_json": "e586584a9495cd29bbaac1f891f6dbae9992c6df2e52936c81d1467c8aa5706e",
+  "leaves": 19926,
+  "kind": "A"
+ }
+]

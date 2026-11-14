@@ -1,0 +1,44 @@
+name: watch
+
+on:
+  schedule:
+    - cron: '23 3 * * *'   # 毎日 03:23 UTC（日本時間 12:23）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 差分の道具の試験
+        run: python3 hts/rev_diff.py demo
+      - name: 見張り
+        id: w
+        run: python3 hts/watch.py
+      - name: 保存
+        if: steps.w.outputs.new != ''
+        env:
+          NEW: ${{ steps.w.outputs.new }}
+          KIND: ${{ steps.w.outputs.kind }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add releases diffs
+          git commit -m "archive: ${NEW} (kind ${KIND})"
+          git push
+      - name: 知らせ
+        if: steps.w.outputs.new != '' && steps.w.outputs.kind != 'A'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ steps.w.outputs.new }}
+          KIND: ${{ steps.w.outputs.kind }}
+        run: gh issue create --title "関税表の改訂 ${NEW}: 商品の行が変わった（型 ${KIND}）" --body-file summary.md

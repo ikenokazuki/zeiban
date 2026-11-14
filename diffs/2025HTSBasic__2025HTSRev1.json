@@ -1,0 +1,22 @@
+{
+ "old": "2025HTSBasic",
+ "new": "2025HTSRev1",
+ "n_leaves_old": 19708,
+ "n_leaves_new": 19710,
+ "born": [
+  "4420190000",
+  "9401696031"
+ ],
+ "gone": [],
+ "text": [],
+ "path": [],
+ "kinds": {
+  "増えた": 2
+ },
+ "remap": {},
+ "node_text_changed_by_digits": {},
+ "share_class_changed": 0.00010148163182463974,
+ "share_any_changed": 0.00010148163182463974,
+ "kind": "B",
+ "missed": []
+}
