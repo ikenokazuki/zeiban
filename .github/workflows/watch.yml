@@ -19,8 +19,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: 差分の道具の試験
-        run: python3 hts/rev_diff.py demo
+      - name: 差分と付け替えの道具の試験
+        run: |
+          python3 hts/rev_diff.py demo
+          python3 hts/rev_remap.py demo
       - name: 見張り
         id: w
         run: python3 hts/watch.py
