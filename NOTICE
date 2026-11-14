@@ -1,0 +1,12 @@
+zeiban
+Copyright 2026 ikeno
+
+This product includes data from the Harmonized Tariff Schedule of the United
+States, published by the U.S. International Trade Commission (USITC). The
+tariff schedule is a work of the United States Government.
+
+The archived releases 2025HTSBasic through 2026HTSRev21 under releases/ were
+copied unchanged from Budget-Lab-Yale/tariff-rate-tracker
+(https://github.com/Budget-Lab-Yale/tariff-rate-tracker, commit a5ddf68),
+which is distributed under the MIT License. Copyright (c) 2025-2026 The Budget
+Lab at Yale. The license text is in releases/LICENSE.Budget-Lab-Yale.

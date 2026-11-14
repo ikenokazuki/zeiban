@@ -1,6 +1,8 @@
-# hts-tiny（準備中）
+# zeiban（税番）
 
-米国の関税率表（HTS）の版を毎日見張って、版ごとの写しと、版と版の差分を残すリポジトリ。HTS の 10 桁を当てる小さなモデルを、関税表の改訂に合わせて保つための土台にする。モデルの一式は、まだ入っていない。
+**zeiban** — a tiny US HTS classifier that keeps up with tariff revisions. Work in progress: this repository currently holds the release archive of the Harmonized Tariff Schedule of the United States, the diffs between releases, and a daily watcher. The model itself is not here yet.
+
+米国の関税率表（HTS）の 10 桁（税番）を、商品の文から当てる小さなモデルを、関税表の改訂に合わせて保つためのリポジトリ。いまは準備中で、入っているのは、版ごとの写し・版と版の差分・毎日の見張りだけ。モデルの一式は、まだ入っていない。
 
 ## 中身
 
@@ -41,3 +43,9 @@
 ```sh
 python3 hts/rev_diff.py demo
 ```
+
+## ライセンス
+
+- コードは Apache License 2.0（`LICENSE`・`NOTICE`）。
+- 関税率表のデータは、米国政府の著作物。
+- `releases/` の 2025HTSBasic〜2026HTSRev21 の写しは、Budget-Lab-Yale/tariff-rate-tracker のもの（MIT。`releases/LICENSE.Budget-Lab-Yale`）。
