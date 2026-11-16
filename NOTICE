@@ -10,3 +10,36 @@ copied unchanged from Budget-Lab-Yale/tariff-rate-tracker
 (https://github.com/Budget-Lab-Yale/tariff-rate-tracker, commit a5ddf68),
 which is distributed under the MIT License. Copyright (c) 2025-2026 The Budget
 Lab at Yale. The license text is in releases/LICENSE.Budget-Lab-Yale.
+
+The model bundle (zeiban.bin, distributed as a release asset) contains the
+following third-party material.
+
+- Weights, vocabulary and tokenizer derived from cl-nagoya/ruri-v3-30m
+  (https://huggingface.co/cl-nagoya/ruri-v3-30m), distributed under the Apache
+  License, Version 2.0. That model is built on sbintuitions/modernbert-ja-30m
+  (https://huggingface.co/sbintuitions/modernbert-ja-30m), distributed under
+  the MIT License. Changes: ten layers were averaged into three, the model was
+  fine-tuned for tariff classification, and the weights were quantized to
+  int8.
+
+- A lexical index and weights trained on "CROSS Rulings HTS Dataset for Tariff
+  Classification by Flexify.AI Inc. (https://www.flexify.ai)", distributed
+  under the Apache License, Version 2.0. The copy used is
+  https://huggingface.co/datasets/Dayanand314Krishna/cross_rulings_hts_dataset_for_tariffs.
+  Changes: the question boilerplate was removed, codes that no longer exist in
+  the current tariff schedule were mapped to the deepest remaining digits, and
+  only the training split was used. The dataset itself is not redistributed.
+
+- Weights trained on product texts from the Amazon Shopping Queries Dataset
+  (ESCI, https://github.com/amazon-science/esci-data) and from
+  Shopify/product-catalogue
+  (https://huggingface.co/datasets/Shopify/product-catalogue), both
+  distributed under the Apache License, Version 2.0. The product texts are
+  not redistributed.
+
+- Text of rulings issued by U.S. Customs and Border Protection (works of the
+  United States Government) was used to write training examples. The ruling
+  texts are not redistributed.
+
+Part of the training data was written or labelled with large language models
+(Anthropic Claude Haiku 5.5 and Google Gemini Decision 1).
