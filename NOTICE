@@ -41,5 +41,12 @@ distributed as release assets, contain the following third-party material.
   United States Government) was used to write training examples. The ruling
   texts are not redistributed.
 
+- Advance classification rulings published by Japan Customs were used to train
+  the second (Japanese) reader and to evaluate Japanese input. Source: Japan
+  Customs website (https://www.customs.go.jp/), "Advance Classification Ruling
+  Cases" search results; the listing was processed (product name, description
+  and the first six digits of the tariff number). The texts are not
+  redistributed.
+
 Part of the training data was written or labelled with large language models
 (Anthropic Claude Haiku 5.5 and Google Gemini Decision 1).

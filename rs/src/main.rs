@@ -169,12 +169,38 @@ struct Model {
     duty: Vec<&'static str>,      // 税率の 3 欄の組（一般・特恵・第 2 欄をタブで区切った行）。古い一式には無い（空）
     leaf_duty: &'static [u16],    // 葉 → duty の行の番号
     calib: Option<[[[f64; 4]; 5]; 2]>, // 確度の係数（段ごとの a・b・c・d）。[0] は最初の応答、[1] は prefix つきの呼び直し。無ければ、合わせ込みをしない
+    alt: Option<Alt>,                  // 日本語の入力を読む 2 つ目の層（目録の route.ja。無い一式では、全部の入力をもとの層で読む）
+}
+
+// 2 つ目の層: 文を読む層・問いの射影・目盛り・確度の係数だけが別。語の埋め込み・節のベクトル・索引は、もとの層と同じものを使う
+struct Alt {
+    enc: enc::Engine,
+    scale: &'static [f32],
+    lam: &'static [f32],
+    calib: Option<[[[f64; 4]; 5]; 2]>,
+    share: f64, // 語の一致に使う文の、空白でない字のうち、かな・漢字がこの割合以上なら、この層で読む
+}
+
+// 切り替えの決まり: 空白でない字のうち、かな・漢字（ひらがな・カタカナ・半角カタカナ・漢字）が share 以上か
+fn is_ja(s: &str, share: f64) -> bool {
+    let (mut n, mut ja) = (0usize, 0usize);
+    for c in s.chars() {
+        if matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{0b}' | '\u{0c}' | '\u{3000}') {
+            continue;
+        }
+        n += 1;
+        if matches!(c, '\u{3040}'..='\u{30ff}' | '\u{ff66}'..='\u{ff9f}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{f900}'..='\u{faff}') {
+            ja += 1;
+        }
+    }
+    n > 0 && ja as f64 >= share * n as f64
 }
 
 struct Pred {
     ids: Vec<u32>,
     bmx: Vec<(u16, f32)>,
     top: Vec<(f32, usize)>, // (葉の点, 葉の番号)
+    ja: bool,               // 2 つ目の層（日本語）で読んだか
 }
 
 impl Model {
@@ -216,6 +242,22 @@ impl Model {
                 (Value::Null, _) => None,
                 (a, p) => Some([serde_json::from_value(a.clone()).context("目録の calib（段ごとの 4 つの数が 5 段ぶん）")?, serde_json::from_value(p.clone()).context("目録の calibPrefix")?]),
             },
+            alt: match &b.man["route"]["ja"] {
+                Value::Null => None,
+                r => {
+                    let pre = r["prefix"].as_str().context("目録の route.ja.prefix")?;
+                    Some(Alt {
+                        enc: enc::Engine::with_prefix(b, pre)?,
+                        scale: b.get(&format!("{pre}scale")),
+                        lam: b.get(&format!("{pre}lam")),
+                        calib: match (&r["calib"], &r["calibPrefix"]) {
+                            (Value::Null, _) => None,
+                            (a, p) => Some([serde_json::from_value(a.clone()).context("目録の route.ja.calib")?, serde_json::from_value(p.clone()).context("目録の route.ja.calibPrefix")?]),
+                        },
+                        share: r["share"].as_f64().context("目録の route.ja.share")?,
+                    })
+                }
+            },
             n_nodes,
         };
         let total: usize = m.n_nodes.iter().sum();
@@ -246,7 +288,13 @@ impl Model {
         let mut ids = vec![self.tok.bos];
         ids.extend(self.tok.encode(text).into_iter().take(self.q_len - 2));
         ids.push(self.tok.eos);
-        let q = self.enc.query(&ids);
+        // 日本語の入力は 2 つ目の層で読む（ある一式だけ）。それ以外は、もとの層
+        let ja = self.alt.as_ref().is_some_and(|a| is_ja(lex, a.share));
+        let (eng, scale, lam) = match &self.alt {
+            Some(a) if ja => (&a.enc, a.scale, a.lam),
+            _ => (&self.enc, self.scale, self.lam),
+        };
+        let q = eng.query(&ids);
         // 段ごとの点 → 対数確率。節の BMX の点は、その下の葉の点の最大（無ければ 0）
         let total = self.node_s.len();
         let (mut s, mut bm) = (vec![0f32; total], vec![0f32; total]);
@@ -262,7 +310,7 @@ impl Model {
             }
             let mut mx = f32::NEG_INFINITY;
             for j in at..at + n {
-                s[j] = self.scale[t] * (s[j] * self.node_s[j]) + self.lam[t] * bm[j];
+                s[j] = scale[t] * (s[j] * self.node_s[j]) + lam[t] * bm[j];
                 mx = mx.max(s[j]);
             }
             let lse = mx as f64 + s[at..at + n].iter().map(|&x| ((x - mx) as f64).exp()).sum::<f64>().ln();
@@ -281,7 +329,7 @@ impl Model {
             top.truncate(k);
         }
         top.sort_unstable_by(cmp);
-        Pred { ids, bmx, top }
+        Pred { ids, bmx, top, ja }
     }
 }
 
@@ -310,14 +358,15 @@ impl Model {
 
     // 上位の候補 → 応答の欄（hsCode・sixDigit・confidenceScore・sixDigitConfidence・dutyRate・alternates・questions）。
     // 確率（probabilityMass）は、候補の葉の点の softmax（temp で割る）。fixed は、呼び手がもう答えた段の数（prefix の桁 ÷ 2）
-    fn respond(&self, top: &[(f32, usize)], fixed: usize, o: &mut Value) {
+    fn respond(&self, top: &[(f32, usize)], fixed: usize, ja: bool, o: &mut Value) {
         let Some(&(best, first)) = top.first() else { return };
         let w: Vec<f64> = top.iter().map(|x| ((x.0 as f64 - best as f64) / self.temp).exp()).collect();
         let sum: f64 = w.iter().sum();
         let p: Vec<f64> = w.iter().map(|x| x / sum).collect();
         // 段 t の確度 = 1 位の段 t までが正しい確率: σ(a + b·logit(m) + c·1 位の点 + d·答えた段の数)。m は、候補の確率のうち 1 位と同じ節の分（係数を合わせたときと同じ式）。
         // 上の桁の確度は、下の桁より低くしない。呼び手が答えた段は 1（答えは正しいとして出す）
-        let conf = self.calib.map(|c| {
+        let calib = if ja { self.alt.as_ref().and_then(|a| a.calib) } else { self.calib };
+        let conf = calib.map(|c| {
             let (c, mut v) = (c[(fixed > 0) as usize], [0f64; 5]);
             for t in (0..5).rev() {
                 let m: f64 = top.iter().zip(&p).filter(|(x, _)| self.leaf_path[x.1 * 5 + t] == self.leaf_path[first * 5 + t]).map(|(_, q)| q).sum();
@@ -414,7 +463,10 @@ fn run() -> Result<()> {
         let p = m.predict(&text, &lex, k, prefix.as_bytes());
         let codes: Vec<&str> = p.top.iter().map(|&(_, i)| m.code(i)).collect();
         let mut o = json!({ "codes": codes, "scores": p.top.iter().map(|x| x.0).collect::<Vec<_>>(), "htsRelease": m.release });
-        m.respond(&p.top, prefix.len() / 2, &mut o);
+        m.respond(&p.top, prefix.len() / 2, p.ja, &mut o);
+        if p.ja {
+            o["reader"] = json!("ja"); // 2 つ目の層（日本語）で読んだ印。もとの層で読んだ応答には、この欄を足さない（前の版と同じ形のまま）
+        }
         if mode == "debug" {
             o["ids"] = json!(p.ids);
             o["bmx"] = json!(p.bmx);

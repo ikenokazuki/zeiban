@@ -547,27 +547,32 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(b: &'static Bundle) -> Result<Self> {
+        Self::with_prefix(b, "")
+    }
+
+    // pre: 層・正規化・問いの射影の区画の名前の頭（もとの層は ""、2 つ目の層は目録の route の prefix）。語の埋め込み（emb・emb.s）は、どの層でも同じものを使う
+    pub fn with_prefix(b: &'static Bundle, pre: &str) -> Result<Self> {
         avx_on(); // ここで経路を決める
         let mut layers = Vec::new();
         for i in 0..3 {
             layers.push(Layer {
-                attn_norm: (i > 0).then(|| b.get(&format!("l{i}.attn_norm"))),
-                qkv: Packed::load(b, &format!("l{i}.qkv"), QKV, D)?,
-                proj: Packed::load(b, &format!("l{i}.proj"), D, D)?,
-                mlp_norm: b.get(&format!("l{i}.mlp_norm")),
-                wi: Packed::load(b, &format!("l{i}.wi"), 2 * FF, D)?,
-                wo: Packed::load(b, &format!("l{i}.wo"), D, FF)?,
+                attn_norm: (i > 0).then(|| b.get(&format!("{pre}l{i}.attn_norm"))),
+                qkv: Packed::load(b, &format!("{pre}l{i}.qkv"), QKV, D)?,
+                proj: Packed::load(b, &format!("{pre}l{i}.proj"), D, D)?,
+                mlp_norm: b.get(&format!("{pre}l{i}.mlp_norm")),
+                wi: Packed::load(b, &format!("{pre}l{i}.wi"), 2 * FF, D)?,
+                wo: Packed::load(b, &format!("{pre}l{i}.wo"), D, FF)?,
                 window: (i > 0).then_some(WINDOW),
             });
         }
         Ok(Self {
             emb: b.get("emb"),
             emb_s: b.get("emb.s"),
-            emb_norm: b.get("emb_norm"),
+            emb_norm: b.get(&format!("{pre}emb_norm")),
             layers,
-            final_norm: b.get("final_norm"),
-            q_proj: Packed::load(b, "q_proj", 5 * D, D)?,
-            q_bias: b.get("q_proj.b"),
+            final_norm: b.get(&format!("{pre}final_norm")),
+            q_proj: Packed::load(b, &format!("{pre}q_proj"), 5 * D, D)?,
+            q_bias: b.get(&format!("{pre}q_proj.b")),
             rope_global: Rope::new(160000.0),
             rope_local: Rope::new(10000.0),
         })
