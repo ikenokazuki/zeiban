@@ -6,6 +6,7 @@
 - **答えの形**: 10 桁のコード・確度・代わりの候補・基本の税率に、**確認の質問**（「綿か、ほかの繊維か」のように、候補が分かれる所を関税率表の公式の文で聞く）を付けて返す。
 - **改訂に付いていく仕組み**: 関税率表の版を毎日見張り、版ごとの写しと差分を残している。モデルの中の表（木・行の文・税率）は重みではなくデータとして持つ。
 - 英語と日本語の商品文を受け付ける。
+- **動かし方は 2 つ**: Rust の実行ファイル（速い・小さい）と、Python と transformers の実装。答えは同じ。
 
 > **先に知っておいてほしいこと**
 >
@@ -28,6 +29,11 @@
 - [参考にした研究](#参考にした研究)
 
 ## 使い方
+
+動かし方は 2 つある。入力と応答の形は同じで、答えも同じになる。
+
+- **Rust の実行ファイル**（下の 1〜3）: 速くて小さい。Rust で組み立てる。
+- **Python と transformers**（[下の節](#python-と-transformers-で使う)）: 組み立てが要らない。エンコーダは、標準の ModernBERT の形で配っている。
 
 ### 1. 実行ファイルを作る
 
@@ -149,6 +155,51 @@ echo '{"name": "Mens crew neck t-shirt", "prefix": "610910"}' | ../rs/target/rel
 
 実行ファイルは、入力を 1 行読むごとに 1 行返す。立てたままにして 1 行ずつ渡せば、読み込み（約 12 ms）は最初の 1 回で済む。HTTP の口は入っていないので、要るなら薄い包みを自分で付ける。
 
+### Python と transformers で使う
+
+`py/zeiban.py` は、同じ一式を読む Python の実装。3 層のエンコーダを Hugging Face の transformers で読み、残り（語の一致の点・木の採点・確度・質問）を numpy で計算する。入力と応答は、Rust の実行ファイルと同じ。
+
+```sh
+pip install numpy torch transformers
+
+# リポジトリの直下で。bundle/ は、上の「2. 一式を取る」で作ったもの
+curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.1.0/zeiban-encoder.tar.gz
+echo "2eecca9fa8aa4755d51aea95d78070adb94eaea893661a7273fb8aef2f49ed63  zeiban-encoder.tar.gz" | sha256sum -c
+tar xzf zeiban-encoder.tar.gz
+
+echo '{"name": "Mens crew neck t-shirt"}' | python3 py/zeiban.py bundle zeiban-encoder
+```
+
+Python のコードから:
+
+```python
+import sys
+sys.path.insert(0, 'py')
+from zeiban import Zeiban
+
+z = Zeiban('bundle', 'zeiban-encoder')
+r = z.classify({'name': 'Mens crew neck t-shirt', 'material': '100% cotton, knitted'})
+print(r['hsCode']['code'], r['sixDigit'], r['dutyRate']['general'])   # 6109100011 610910 16.5%
+```
+
+- `zeiban-encoder`（65.7 MB の tar.gz）は、エンコーダを「ふつうの 3 層の ModernBERT」の形（`config.json`・`model.safetensors`・`tokenizer.json`）で書き出したもの。重みは一式と同じ値（int8 に丸めた値を fp32 で持つ）なので、答えは Rust の実行ファイルと同じになる。公開の商品文 1,568 件と、質問に答えたあとの呼び直し 1,568 件で比べて、上位 5 件のコードと順・確度・質問・税率が全部同じだった（点の差は最大 0.00007）。
+- 速さは 1 件 16〜22 ms（同じ台・2 スレッド）。読み込みに約 8 秒かかり、メモリは約 670 MB 使う（torch の分）。軽さが要るなら、Rust の実行ファイルを使う。
+- 確かめた版: Python 3.11・transformers 4.57・torch 2.9（CPU）・numpy 2.4。
+
+エンコーダだけを、transformers のふつうの呼び方で使うこともできる。
+
+```python
+import torch
+from transformers import AutoModel, AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained('zeiban-encoder')
+enc = AutoModel.from_pretrained('zeiban-encoder').eval()
+with torch.no_grad():
+    h = enc(**tok('title: Mens crew neck t-shirt', return_tensors='pt')).last_hidden_state[:, 0]   # 先頭トークンの状態 [1, 256]
+```
+
+このベクトルは、商品どうしの近さを測るための埋め込みではない（関税率表の節のベクトルと比べる前の、途中の値）。10 桁を出すには、`py/zeiban.py` のように、一式の射影・節のベクトル・索引と合わせて使う。標準の形なので、ModernBERT を読めるほかのエンジンにも載せられる見込みだが、確かめたのは transformers だけ。
+
 ## 精度
 
 ### 測り方
@@ -246,7 +297,9 @@ echo '{"name": "Mens crew neck t-shirt", "prefix": "610910"}' | ../rs/target/rel
 | 関税率表の行の文・木・税率 | 2.7 |
 | **合計** | **57.5** |
 
-1 件の時間には、語の区切り・索引の検索・エンコーダ・採点・上位 5 件の取り出しまでの全部が入る（JSON の読み書きは入らない）。一式はメモリにマップして読むので、常駐メモリのほとんどはファイルの写しで、実行ファイルが自分で持つ分は 約 12 MB。実行ファイルと Python の基準の実装は、1,000 行で 1 位が全部同じになることを確かめてある。
+1 件の時間には、語の区切り・索引の検索・エンコーダ・採点・上位 5 件の取り出しまでの全部が入る（JSON の読み書きは入らない）。一式はメモリにマップして読むので、常駐メモリのほとんどはファイルの写しで、実行ファイルが自分で持つ分は 約 12 MB。実行ファイルと、学習のときの Python の実装は、1,000 行で 1 位が全部同じになることを確かめてある。
+
+上の表は Rust の実行ファイルの数。Python と transformers の実装は、1 件 16〜22 ms・メモリ 約 670 MB（[Python と transformers で使う](#python-と-transformers-で使う)）。
 
 ## モデルの作り
 
@@ -322,7 +375,7 @@ echo '{"name": "Mens crew neck t-shirt", "prefix": "610910"}' | ../rs/target/rel
 
 ### 配っていないもの
 
-- 学習データそのもの（判例の書き直し・合成の商品名・ラベルを付けた商品文）と、学習・データ作りの台本は、このリポジトリに入れていない。入っているのは、実行ファイルのソースと、一式（リリースの添付）。
+- 学習データそのもの（判例の書き直し・合成の商品名・ラベルを付けた商品文）と、学習・データ作りの台本は、このリポジトリに入れていない。入っているのは、実行ファイルのソース・Python の実装と、一式・エンコーダのファイル（リリースの添付）。
 - 判例の原文と、要約の文は配らない。
 
 ## 改訂への追従
@@ -401,7 +454,8 @@ echo '{"name": "Mens crew neck t-shirt", "prefix": "610910"}' | ../rs/target/rel
 | 場所 | 中身 |
 |---|---|
 | `rs/` | 実行ファイルのソース（Rust）。`main.rs`（読み込み・採点・応答）・`enc.rs`（エンコーダの CPU 推論）・`tok.rs`（語の区切り） |
-| [Releases](https://github.com/ikenokazuki/zeiban/releases) | 一式（`zeiban.bin`）と目録（`zeiban.json`） |
+| `py/zeiban.py` | Python の実装（エンコーダは transformers、残りは numpy） |
+| [Releases](https://github.com/ikenokazuki/zeiban/releases) | 一式（`zeiban.bin`）と目録（`zeiban.json`）、標準の形のエンコーダ（`zeiban-encoder.tar.gz`） |
 | `releases/` | 関税率表の版ごとの JSON（gzip）と、索引 `index.json`（版の名前・日付・sha256・葉の数・型） |
 | `diffs/` | となり合う版の差分（増えた葉・消えた葉・文が変わった葉・消えた葉の行き先・型） |
 | `bulletins/` | 税関の公報から抜き出した、判例の取り消し・変更の告示 |
@@ -415,6 +469,7 @@ python3 hts/rev_diff.py demo
 python3 hts/rev_remap.py demo
 python3 hts/bulletin.py demo
 python3 hts/rev_remap.py check 2026HTSRev10 2026HTSRev11
+python3 py/zeiban.py demo
 ```
 
 ### 見張りの細かい点
@@ -425,7 +480,7 @@ python3 hts/rev_remap.py check 2026HTSRev10 2026HTSRev11
 
 ## ライセンスと表示
 
-- コードと一式（重みを含む）は Apache License 2.0（`LICENSE`・`NOTICE`）。
+- コードと、一式・エンコーダのファイル（どちらも重みを含む）は Apache License 2.0（`LICENSE`・`NOTICE`）。
 - 関税率表と税関の公報・判例は、米国政府の著作物。
 - 土台のモデル: [`cl-nagoya/ruri-v3-30m`](https://huggingface.co/cl-nagoya/ruri-v3-30m)（Apache-2.0）。その土台は [`sbintuitions/modernbert-ja-30m`](https://huggingface.co/sbintuitions/modernbert-ja-30m)（MIT）。語彙と語の区切りも同じもの。
 - 学習と索引に使ったデータ: “CROSS Rulings HTS Dataset for Tariff Classification by Flexify.AI Inc. (https://www.flexify.ai)”（Apache-2.0。問いの決まり文句を外し、コードを現行の版に付け替えて使った）、Amazon の Shopping Queries Dataset（ESCI、Apache-2.0）、Shopify の product-catalogue（Apache-2.0）。

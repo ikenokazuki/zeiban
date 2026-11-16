@@ -11,8 +11,8 @@ copied unchanged from Budget-Lab-Yale/tariff-rate-tracker
 which is distributed under the MIT License. Copyright (c) 2025-2026 The Budget
 Lab at Yale. The license text is in releases/LICENSE.Budget-Lab-Yale.
 
-The model bundle (zeiban.bin, distributed as a release asset) contains the
-following third-party material.
+The model bundle (zeiban.bin) and the encoder files (zeiban-encoder), both
+distributed as release assets, contain the following third-party material.
 
 - Weights, vocabulary and tokenizer derived from cl-nagoya/ruri-v3-30m
   (https://huggingface.co/cl-nagoya/ruri-v3-30m), distributed under the Apache
