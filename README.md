@@ -163,7 +163,7 @@ echo '{"name": "Mens crew neck t-shirt", "prefix": "610910"}' | ../rs/target/rel
 
 ### ほかの仕組みに組み込むとき
 
-実行ファイルは、入力を 1 行読むごとに 1 行返す。立てたままにして 1 行ずつ渡せば、読み込み（約 12 ms）は最初の 1 回で済む。HTTP の口は入っていないので、要るなら薄い包みを自分で付ける。
+実行ファイルは、入力を 1 行読むごとに 1 行返す。立てたままにして 1 行ずつ渡せば、読み込み（約 14〜19 ms）は最初の 1 回で済む。HTTP の口は入っていないので、要るなら薄い包みを自分で付ける。
 
 ### Python と transformers で使う
 
@@ -207,8 +207,8 @@ enc = AutoModel.from_pretrained('zeiban-encoder').eval()
 with torch.no_grad():
     h = enc(**tok('title: Mens crew neck t-shirt', return_tensors='pt')).last_hidden_state[:, 0]   # 先頭トークンの状態 [1, 256]
 ```
-日本語用の層は `zeiban-encoder/ja` にある（語の区切りは、もとの層と同じ `zeiban-encoder` のものを使う）。
 
+日本語用の層は `zeiban-encoder/ja` にある（語の区切りは、もとの層と同じ `zeiban-encoder` のものを使う）。
 
 このベクトルは、商品どうしの近さを測るための埋め込みではない（関税率表の節のベクトルと比べる前の、途中の値）。10 桁を出すには、`py/zeiban.py` のように、一式の射影・節のベクトル・索引と合わせて使う。標準の形なので、ModernBERT を読めるほかのエンジンにも載せられる見込みだが、確かめたのは transformers だけ。
 
