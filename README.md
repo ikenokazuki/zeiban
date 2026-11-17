@@ -6,7 +6,7 @@
 - **答えの形**: 10 桁のコード・確度・代わりの候補・基本の税率に、**確認の質問**（「綿か、ほかの繊維か」のように、候補が分かれる所を関税率表の公式の文で聞く）を付けて返す。
 - **改訂に付いていく仕組み**: 関税率表の版を毎日見張り、版ごとの写しと差分を残している。モデルの中の表（木・行の文・税率）は重みではなくデータとして持つ。
 - **英語と日本語**の商品文を受け付ける。日本語の文は、日本語用の 2 つ目の層で読む（[日本語での評価](#日本語での評価)）。日本語でない文の答えは、v0.1.0 と 1 件も変わらない。
-- **動かし方は 2 つ**: Rust の実行ファイル（速い・小さい）と、Python と transformers の実装。答えは同じ。
+- **動かし方は 3 つ**: Rust の実行ファイル（速い・小さい）、WebAssembly（Node・Bun・Deno・ブラウザの中で動く）、Python と transformers の実装。答えは同じ。
 
 > **先に知っておいてほしいこと**
 >
@@ -31,9 +31,10 @@
 
 ## 使い方
 
-動かし方は 2 つある。入力と応答の形は同じで、答えも同じになる。
+動かし方は 3 つある。入力と応答の形は同じで、答えも同じになる。
 
 - **Rust の実行ファイル**（下の 1〜3）: 速くて小さい。Rust で組み立てる。
+- **WebAssembly**（[下の節](#webassembly-で使う)）: 組み立てが要らない。JavaScript の実行環境の中で、別のプロセスなしに動く。
 - **Python と transformers**（[下の節](#python-と-transformers-で使う)）: 組み立てが要らない。エンコーダは、標準の ModernBERT の形で配っている。
 
 ### 1. 実行ファイルを作る
@@ -54,12 +55,12 @@ cargo build --release
 
 ```sh
 mkdir -p ../bundle && cd ../bundle
-curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.2.0/zeiban.bin
-curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.2.0/zeiban.json
+curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.2.1/zeiban.bin
+curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.2.1/zeiban.json
 echo "ba2f7883e9d37315c2c64137bd3fbe8d420eb0d552aa9e808b6e43b78a9653e0  zeiban.bin" | sha256sum -c
 ```
 
-前の版（v0.1.0）の一式も、リリースに残してある。v0.2.0 の `zeiban.bin` は、v0.1.0 の中身をそのまま頭に持ち、うしろに日本語用の層を足したもの。
+一式とエンコーダの中身は v0.2.0 と同じ（v0.2.1 で足したのは WebAssembly だけ）。前の版（v0.1.0）の一式も、リリースに残してある。v0.2.0 の `zeiban.bin` は、v0.1.0 の中身をそのまま頭に持ち、うしろに日本語用の層を足したもの。
 
 ### 3. 動かす
 
@@ -165,6 +166,34 @@ echo '{"name": "Mens crew neck t-shirt", "prefix": "610910"}' | ../rs/target/rel
 
 実行ファイルは、入力を 1 行読むごとに 1 行返す。立てたままにして 1 行ずつ渡せば、読み込み（約 14〜19 ms）は最初の 1 回で済む。HTTP の口は入っていないので、要るなら薄い包みを自分で付ける。
 
+### WebAssembly で使う
+
+実行ファイルと同じ計算を、WebAssembly（`zeiban.wasm`、約 0.4 MB）としても配っている。Node・Bun・Deno・ブラウザなど、WebAssembly を動かせる所で、そのプロセスの中で動く。外からの取り込みが無いモジュールなので、ファイルにも通信にも触れない（一式の中身は、呼び手が読んで渡す）。
+
+```sh
+# リポジトリの直下で。bundle/ は、上の「2. 一式を取る」で作ったもの
+curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.2.1/zeiban.wasm
+echo "99a73553df45a426e28a122754cfb1c1cd7e3c828b2d08093eb8796691a73bf0  zeiban.wasm" | sha256sum -c
+
+echo '{"name": "Mens crew neck t-shirt"}' | node js/zeiban.mjs zeiban.wasm bundle
+```
+
+JavaScript のコードから（`js/zeiban.mjs` は、依存の無い小さな包み）:
+
+```js
+import { readFileSync } from 'node:fs';
+import { load } from './js/zeiban.mjs';
+
+const z = await load(readFileSync('zeiban.wasm'), readFileSync('bundle/zeiban.json'), readFileSync('bundle/zeiban.bin'));
+const r = z.classify({ name: 'Mens crew neck t-shirt', material: '100% cotton, knitted' });
+console.log(r.hsCode.code, r.sixDigit, r.dutyRate.general);   // 6109100011 610910 16.5%
+```
+
+- 答えは、Rust の実行ファイルと同じになる。4,858 件（日本語の文 2,928 件、質問に答えたあとの呼び直し 2,429 件を含む）で比べて、上位 5 件のコードと順・確度・質問・税率が全部同じだった（点の差は最大 0.00005）。Bun 1.3 と Node 22 で確かめた。
+- 速さは 1 件 中央 約 24 ms・95% 点 約 58 ms（1 スレッド。同じ台・Bun）。実行ファイルの専用の計算（中央 6〜9 ms）より遅い。読み込みは約 0.4 秒で、一式の 61 MB は wasm のメモリの中に置かれる。
+- 自分で作るときは `rs/build-wasm.sh`（Rust の `wasm32-unknown-unknown` と、LLVM の `wasm-ld` が要る）。台本がパスを決まった名前に置き換えるので、組み立てる場所が違っても、同じソースからは同じ中身のファイルができる（Rust 1.91.1・LLD 21.1.7 で、置き場所の違う 3 か所から組み立てて確かめた。道具の版が違えば、中身は変わりうる）。
+- ほかの言語から直に呼ぶときの口は 6 つ（`zb_alloc`・`zb_free`・`zb_load`・`zb_classify`・`zb_out_ptr`・`zb_out_len`）。呼ぶ順は、`rs/src/main.rs` の `mod wasm` の前の注釈にある。
+
 ### Python と transformers で使う
 
 `py/zeiban.py` は、同じ一式を読む Python の実装。3 層のエンコーダを Hugging Face の transformers で読み、残り（語の一致の点・木の採点・確度・質問）を numpy で計算する。入力と応答は、Rust の実行ファイルと同じ。
@@ -173,7 +202,7 @@ echo '{"name": "Mens crew neck t-shirt", "prefix": "610910"}' | ../rs/target/rel
 pip install numpy torch transformers
 
 # リポジトリの直下で。bundle/ は、上の「2. 一式を取る」で作ったもの
-curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.2.0/zeiban-encoder.tar.gz
+curl -LO https://github.com/ikenokazuki/zeiban/releases/download/v0.2.1/zeiban-encoder.tar.gz
 echo "024df701691a6b90013acc4fe427c7d6773cfadb31ef5987a8615bcaea15ef8b  zeiban-encoder.tar.gz" | sha256sum -c
 tar xzf zeiban-encoder.tar.gz
 
@@ -621,7 +650,8 @@ v0.2.0 は、文を読む層を 2 組持つ。語の埋め込み・節のベク�
 
 | 場所 | 中身 |
 |---|---|
-| `rs/` | 実行ファイルのソース（Rust）。`main.rs`（読み込み・採点・応答）・`enc.rs`（エンコーダの CPU 推論）・`tok.rs`（語の区切り） |
+| `rs/` | 実行ファイルのソース（Rust）。`main.rs`（読み込み・採点・応答・WebAssembly の口）・`enc.rs`（エンコーダの CPU 推論）・`tok.rs`（語の区切り）・`build-wasm.sh`（WebAssembly の組み立て） |
+| `js/` | `zeiban.mjs`: `zeiban.wasm` を読む小さな包み（JavaScript。依存なし）と、そのコマンド |
 | `py/zeiban.py` | Python の実装（エンコーダは transformers、残りは numpy） |
 | [Releases](https://github.com/ikenokazuki/zeiban/releases) | 一式（`zeiban.bin`）と目録（`zeiban.json`）、標準の形のエンコーダ（`zeiban-encoder.tar.gz`。もとの層と、その中の `ja/` に日本語用の層） |
 | `releases/` | 関税率表の版ごとの JSON（gzip）と、索引 `index.json`（版の名前・日付・sha256・葉の数・型） |

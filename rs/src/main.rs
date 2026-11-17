@@ -22,15 +22,20 @@
 //   bench: 全部の行を読んでから 1 件ずつ時間を測り、1 行の JSON（読み込みの時間・常駐メモリ・スレッドの数・計算の経路・件ごとの [トークン数, マイクロ秒]）を出す。
 // 計算は 2 スレッド（rayon の 2 本の中で全部を動かす）。エンコーダの計算の経路は、CPU に AVX2 と FMA があれば avx2、無ければ portable（どの CPU でも動く。enc.rs）。
 // 環境変数 ZEIBAN_PORTABLE を置くと、いつも portable を使う。
+// WebAssembly（wasm32-unknown-unknown。rs/build-wasm.sh）では、実行ファイルの代わりに、呼び出す口を出す（下の mod wasm）。
+//   ファイルも標準入出力も使わない: 呼び手が、目録と一式の中身を wasm のメモリに書いて渡す。入力と応答は、上の JSON の 1 行と同じ。スレッドは 1 本。
 mod enc;
 mod tok;
 
 use anyhow::{bail, Context, Result};
 use enc::D;
 use serde_json::{json, Value};
-use std::io::{BufRead, Write};
-use std::path::Path;
-use std::time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
+    io::{BufRead, Write},
+    path::Path,
+    time::Instant,
+};
 
 #[cfg(target_endian = "big")]
 compile_error!("一式の数はリトルエンディアンで書いてある（マップしたまま読むので、ビッグエンディアンの台では読めない）");
@@ -38,7 +43,7 @@ compile_error!("一式の数はリトルエンディアンで書いてある（�
 const NONE: u16 = 0xFFFF; // tok.term: 語彙の点に使わない片
 
 pub struct Bundle {
-    map: memmap2::Mmap,
+    map: &'static [u8],
     pub man: Value,
 }
 
@@ -51,11 +56,17 @@ macro_rules! num {
 num!(i8 = "int8", u8 = "uint8", u16 = "uint16", u32 = "uint32", f32 = "float32", f64 = "float64");
 
 impl Bundle {
+    #[cfg(not(target_arch = "wasm32"))]
     fn open(dir: &Path) -> Result<&'static Self> {
         let man: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("zeiban.json"))?)?;
         let file = std::fs::File::open(dir.join(man["file"].as_str().context("目録の file")?))?;
         // SAFETY: 読むだけのマップ。動いている間にファイルを書き換えないこと
-        let map = unsafe { memmap2::Mmap::map(&file)? };
+        let map: &'static [u8] = Box::leak(Box::new(unsafe { memmap2::Mmap::map(&file)? }));
+        Self::from_parts(man, map)
+    }
+
+    // 目録と、一式の中身（64 バイトの境界にそろえて置いたもの）から作る。WebAssembly では、こちらだけを使う
+    fn from_parts(man: Value, map: &'static [u8]) -> Result<&'static Self> {
         if man["bytes"].as_u64() != Some(map.len() as u64) {
             bail!("一式の大きさが目録と合わない");
         }
@@ -204,8 +215,12 @@ struct Pred {
 }
 
 impl Model {
+    #[cfg(not(target_arch = "wasm32"))]
     fn load(dir: &Path) -> Result<Self> {
-        let b = Bundle::open(dir)?;
+        Self::from_bundle(Bundle::open(dir)?)
+    }
+
+    fn from_bundle(b: &'static Bundle) -> Result<Self> {
         let num = |k: &str| b.man[k].as_u64().map(|x| x as usize).with_context(|| format!("目録の {k}"));
         let n_nodes: Vec<usize> = b.man["n_nodes"].as_array().context("目録の n_nodes")?.iter().map(|x| x.as_u64().unwrap_or(0) as usize).collect();
         let m = Self {
@@ -430,11 +445,116 @@ fn build(v: &Value) -> Result<(String, String)> {
 }
 
 // /proc/self/status の (VmRSS, VmHWM, RssAnon（kB）, Threads)
+#[cfg(not(target_arch = "wasm32"))]
 fn status() -> [u64; 4] {
     let s = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
     ["VmRSS:", "VmHWM:", "RssAnon:", "Threads:"].map(|k| s.lines().find_map(|l| l.strip_prefix(k)).and_then(|v| v.split_whitespace().next()?.parse().ok()).unwrap_or(0))
 }
 
+// 1 件の入力（JSON の 1 行）→ 応答（JSON の 1 行）
+fn answer(m: &mut Model, line: &str, k: usize, debug: bool) -> Result<String> {
+    let v: Value = serde_json::from_str(line)?;
+    let (text, lex) = build(&v)?;
+    let prefix = v["prefix"].as_str().unwrap_or("");
+    if !matches!(prefix.len(), 0 | 2 | 4 | 6 | 8 | 10) || !prefix.bytes().all(|c| c.is_ascii_digit()) {
+        bail!("prefix は 2・4・6・8・10 桁の数字");
+    }
+    let p = m.predict(&text, &lex, k, prefix.as_bytes());
+    let codes: Vec<&str> = p.top.iter().map(|&(_, i)| m.code(i)).collect();
+    let mut o = json!({ "codes": codes, "scores": p.top.iter().map(|x| x.0).collect::<Vec<_>>(), "htsRelease": m.release });
+    m.respond(&p.top, prefix.len() / 2, p.ja, &mut o);
+    if p.ja {
+        o["reader"] = json!("ja"); // 2 つ目の層（日本語）で読んだ印。もとの層で読んだ応答には、この欄を足さない（前の版と同じ形のまま）
+    }
+    if debug {
+        o["ids"] = json!(p.ids);
+        o["bmx"] = json!(p.bmx);
+        o["norm"] = json!(m.nfkc.lex_norm(&lex));
+        o["path"] = json!(enc::path());
+    }
+    Ok(o.to_string())
+}
+
+// WebAssembly の口。呼び手の手順:
+//   1. zb_alloc で場所を 2 つ取り、目録（zeiban.json）と一式（zeiban.bin）の中身を書く
+//   2. zb_load（0 なら成功。一式の場所は、そのまま持ち続けるので、解放しない。目録の場所は zb_free で返してよい）
+//   3. 1 件ごとに: 入力の JSON を zb_alloc した場所に書く → zb_classify（0 なら成功）→ zb_out_ptr・zb_out_len の場所から応答（失敗のときは理由の文）を読む → 入力の場所を zb_free
+// 応答の場所は、次に zb_load・zb_classify を呼ぶまで有効。呼び出しは 1 本のスレッドから順に行うこと。
+#[cfg(target_arch = "wasm32")]
+#[allow(static_mut_refs)]
+mod wasm {
+    use super::*;
+    use std::alloc::{alloc, dealloc, Layout};
+
+    static mut MODEL: Option<Model> = None;
+    static mut OUT: Vec<u8> = Vec::new();
+
+    // 一式の区画は 64 バイトの境界に置いてあるので、場所もその境界で取る
+    fn layout(n: usize) -> Layout {
+        Layout::from_size_align(n.max(1), 64).unwrap()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn zb_alloc(n: usize) -> *mut u8 {
+        unsafe { alloc(layout(n)) }
+    }
+
+    /// # Safety
+    /// p は、同じ n で zb_alloc が返した場所であること。
+    #[no_mangle]
+    pub unsafe extern "C" fn zb_free(p: *mut u8, n: usize) {
+        dealloc(p, layout(n))
+    }
+
+    /// # Safety
+    /// man・bin は、zb_alloc で取って中身を書いた場所であること。bin は、このあと解放しないこと。
+    #[no_mangle]
+    pub unsafe extern "C" fn zb_load(man: *const u8, man_len: usize, bin: *const u8, bin_len: usize) -> i32 {
+        let load = || -> Result<Model> {
+            let man: Value = serde_json::from_slice(std::slice::from_raw_parts(man, man_len))?;
+            Model::from_bundle(Bundle::from_parts(man, std::slice::from_raw_parts(bin, bin_len))?)
+        };
+        match load() {
+            Ok(m) => {
+                MODEL = Some(m);
+                OUT = Vec::new();
+                0
+            }
+            Err(e) => {
+                OUT = format!("{e:#}").into_bytes();
+                1
+            }
+        }
+    }
+
+    /// # Safety
+    /// req は、zb_alloc で取って入力の JSON（UTF-8）を書いた場所であること。
+    #[no_mangle]
+    pub unsafe extern "C" fn zb_classify(req: *const u8, len: usize, k: usize) -> i32 {
+        let res = std::str::from_utf8(std::slice::from_raw_parts(req, len)).context("入力が UTF-8 でない").and_then(|line| answer(MODEL.as_mut().context("zb_load がまだ")?, line, k.max(1), false));
+        let (code, s) = match res {
+            Ok(s) => (0, s),
+            Err(e) => (1, format!("{e:#}")),
+        };
+        OUT = s.into_bytes();
+        code
+    }
+
+    #[no_mangle]
+    pub extern "C" fn zb_out_ptr() -> *const u8 {
+        unsafe { OUT.as_ptr() }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn zb_out_len() -> usize {
+        unsafe { OUT.len() }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn run() -> Result<()> {
     let t0 = Instant::now();
     let mut args = std::env::args().skip(1);
@@ -450,29 +570,11 @@ fn run() -> Result<()> {
         if line.trim().is_empty() {
             continue;
         }
-        let v: Value = serde_json::from_str(&line)?;
-        let (text, lex) = build(&v)?;
-        let prefix = v["prefix"].as_str().unwrap_or("");
-        if !matches!(prefix.len(), 0 | 2 | 4 | 6 | 8 | 10) || !prefix.bytes().all(|c| c.is_ascii_digit()) {
-            bail!("prefix は 2・4・6・8・10 桁の数字");
-        }
         if mode == "bench" {
-            reqs.push((text, lex));
+            reqs.push(build(&serde_json::from_str(&line)?)?);
             continue;
         }
-        let p = m.predict(&text, &lex, k, prefix.as_bytes());
-        let codes: Vec<&str> = p.top.iter().map(|&(_, i)| m.code(i)).collect();
-        let mut o = json!({ "codes": codes, "scores": p.top.iter().map(|x| x.0).collect::<Vec<_>>(), "htsRelease": m.release });
-        m.respond(&p.top, prefix.len() / 2, p.ja, &mut o);
-        if p.ja {
-            o["reader"] = json!("ja"); // 2 つ目の層（日本語）で読んだ印。もとの層で読んだ応答には、この欄を足さない（前の版と同じ形のまま）
-        }
-        if mode == "debug" {
-            o["ids"] = json!(p.ids);
-            o["bmx"] = json!(p.bmx);
-            o["norm"] = json!(m.nfkc.lex_norm(&lex));
-            o["path"] = json!(enc::path());
-        }
+        let o = answer(&mut m, &line, k, mode == "debug")?;
         writeln!(out, "{o}")?;
         out.flush()?;
     }
@@ -488,6 +590,7 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<()> {
     rayon::ThreadPoolBuilder::new().num_threads(2).build()?.install(run)
 }
