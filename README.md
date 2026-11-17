@@ -212,6 +212,29 @@ with torch.no_grad():
 
 このベクトルは、商品どうしの近さを測るための埋め込みではない（関税率表の節のベクトルと比べる前の、途中の値）。10 桁を出すには、`py/zeiban.py` のように、一式の射影・節のベクトル・索引と合わせて使う。標準の形なので、ModernBERT を読めるほかのエンジンにも載せられる見込みだが、確かめたのは transformers だけ。
 
+### Hugging Face から取る
+
+同じものを、Hugging Face にも置いてある: <https://huggingface.co/ikeno-ada/zeiban>。一式・2 つのエンコーダ・`zeiban.py` が 1 つのフォルダに入っているので、リポジトリの clone もリリースの取得も要らない。
+
+```sh
+pip install numpy torch transformers huggingface_hub
+```
+
+```python
+import sys
+from huggingface_hub import snapshot_download
+
+d = snapshot_download('ikeno-ada/zeiban')
+sys.path.insert(0, d)
+from zeiban import Zeiban
+
+z = Zeiban(d, d)   # 一式のフォルダと、エンコーダのフォルダ（ここでは同じ）
+r = z.classify({'name': 'Mens crew neck t-shirt', 'material': '100% cotton, knitted'})
+print(r['hsCode']['code'], r['sixDigit'], r['dutyRate']['general'])   # 6109100011 610910 16.5%
+```
+
+中身はリリース v0.2.0 と同じ（`zeiban.bin` の sha256 が同じ）。Rust の実行ファイルで使うときも、ここから取った `zeiban.bin` と `zeiban.json` を、そのまま渡せる。
+
 ## 精度
 
 ### 測り方
