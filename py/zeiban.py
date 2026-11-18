@@ -25,6 +25,7 @@ from pathlib import Path
 import numpy as np
 
 D, NONE, LEVELS = 256, 0xFFFF, 5
+QN = 30                                                # 質問を作る候補の葉の数（応答に出す上位 k 件とは別。rs/src/main.rs の QN と同じ）
 
 
 def build(item):
@@ -57,14 +58,70 @@ def is_ja(lex, share):
     return len(body) > 0 and ja >= share * len(body)
 
 
+def unpack4(b):
+    """int4 の区画（1 バイトに 2 個。値 −7〜7 に 8 を足したもの。下の 4 ビットが先）[行, n ÷ 2] → int8 [行, n]"""
+    out = np.empty((b.shape[0], b.shape[1] * 2), np.int8)
+    out[:, 0::2], out[:, 1::2] = (b & 15).astype(np.int8) - 8, (b >> 4).astype(np.int8) - 8
+    return out
+
+
+def unpack4_lin(b):
+    """線形の層の int4 の区画 [出力 ÷ 16, 入力, 8] → int8 [出力, 入力]"""
+    n, i, _ = b.shape
+    return np.ascontiguousarray(unpack4(np.asarray(b).reshape(-1, 8)).reshape(n, i, 16).transpose(0, 2, 1)).reshape(n * 16, i)
+
+
+def g6_state(sec, layers):
+    """先頭 6 層の読み手（目録の enc.kind が g6）: 一式の int4 の重みを読んで、トークンの番号 → 状態 [768] を返す関数を作る。
+    計算: 語の表 × √512 → 層ごとの入力（射影 × 512^-0.5 → 512 ごとに RMSNorm）→ 層（RMSNorm → 注意 → RMSNorm → 足す → RMSNorm → 門つきの MLP → RMSNorm → 足す
+    → 層ごとの入力の足し込み → 層の倍率）→ RMSNorm → 射影（512 → 768）→ トークンの平均。注意は、問い 4 頭・問いと鍵に RMSNorm と回転の位置づけ・点の倍率 1。
+    最後の層だけ「頭の幅 512・鍵と値は 1 頭・θ = 1,000,000」、ほかは「頭の幅 256・鍵と値は 2 頭・θ = 10,000」。"""
+    import torch
+    import torch.nn.functional as F
+    H, HEADS = 512, 4
+    lin = lambda k: torch.from_numpy(unpack4_lin(sec(k)).astype(np.float32) * sec(k + '.s')[:, None])
+    vec = lambda k: torch.from_numpy(np.array(sec(k), np.float32))
+    emb, emb_s = sec('g.emb'), sec('g.emb.s')
+    W = {'ple': lin('g.ple'), 'ple.norm': vec('g.ple.norm'), 'norm': vec('g.norm'), 'eproj': lin('g.eproj')}
+    for i in range(layers):
+        W.update({f'{i}.{k}': lin(f'g.l{i}.{k}') for k in ('q', 'k', 'v', 'o', 'gate', 'up', 'down', 'pg', 'pp')})
+        W.update({f'{i}.{k}': vec(f'g.l{i}.{k}') for k in ('n_in', 'n_q', 'n_k', 'n_att', 'n_pre', 'n_ff', 'n_ple', 'scalar')})
+    rms = lambda x, w=None: (lambda y: y if w is None else y * w)(x * torch.pow(x.pow(2).mean(-1, keepdim=True) + 1e-6, -0.5))
+    gelu = lambda x: F.gelu(x, approximate='tanh')
+
+    def rot(x, n, dim, theta):
+        f = torch.arange(n, dtype=torch.float32)[:, None] * (1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim)))
+        e = torch.cat((f, f), -1)
+        return x * e.cos() + torch.cat((-x[..., dim // 2:], x[..., :dim // 2]), -1) * e.sin()
+
+    def state(ids):
+        with torch.no_grad():
+            n = len(ids)
+            x = torch.from_numpy(unpack4(emb[ids]).astype(np.float32) * emb_s[ids][:, None]) * (H ** 0.5)
+            ple = rms(((x @ W['ple'].T) * H ** -0.5).view(n, layers, H), W['ple.norm'])
+            for i in range(layers):
+                hd, kv, theta = (512, 1, 1e6) if i == layers - 1 else (256, 2, 1e4)
+                h = rms(x, W[f'{i}.n_in'])
+                q = rot(rms((h @ W[f'{i}.q'].T).view(n, HEADS, hd).transpose(0, 1), W[f'{i}.n_q']), n, hd, theta)
+                k = rot(rms((h @ W[f'{i}.k'].T).view(n, kv, hd).transpose(0, 1), W[f'{i}.n_k']), n, hd, theta).repeat_interleave(HEADS // kv, 0)
+                v = rms((h @ W[f'{i}.v'].T).view(n, kv, hd).transpose(0, 1)).repeat_interleave(HEADS // kv, 0)
+                a = (torch.softmax(q @ k.transpose(1, 2), -1) @ v).transpose(0, 1).reshape(n, HEADS * hd) @ W[f'{i}.o'].T
+                x = x + rms(a, W[f'{i}.n_att'])
+                h = rms(x, W[f'{i}.n_pre'])
+                x = x + rms((gelu(h @ W[f'{i}.gate'].T) * (h @ W[f'{i}.up'].T)) @ W[f'{i}.down'].T, W[f'{i}.n_ff'])
+                g = (gelu(x @ W[f'{i}.pg'].T) * ple[:, i]) @ W[f'{i}.pp'].T
+                x = (x + rms(g, W[f'{i}.n_ple'])) * W[f'{i}.scalar']
+            return (rms(x, W['norm']) @ W['eproj'].T).mean(0).numpy().astype(np.float64)
+    return state
+
+
 class Zeiban:
-    def __init__(self, bundle, encoder):
+    def __init__(self, bundle, encoder=None):
         """bundle: zeiban.bin と zeiban.json のあるフォルダ。encoder: transformers で読むエンコーダのフォルダ
         （日本語の入力を読む 2 つ目の層のある一式では、その中の ja/ に 2 つ目のエンコーダが要る）。"""
         import torch
         from tokenizers import Tokenizer
-        from transformers import AutoModel
-        bundle, encoder = Path(bundle), Path(encoder)
+        bundle = Path(bundle)
         man = self.man = json.loads((bundle / 'zeiban.json').read_text(encoding='utf-8'))
         raw = np.memmap(bundle / man['file'], mode='r')
         if raw.size != man['bytes']:
@@ -76,11 +133,17 @@ class Zeiban:
 
         self.n_nodes = man['n_nodes']
         self.offs = np.concatenate([[0], np.cumsum(self.n_nodes)])
-        self.node, self.node_s = sec('node').astype(np.float32), sec('node.s')        # int8 の値のまま fp32 で持つ（約 39 MB）
+        g6 = man.get('enc') if (man.get('enc') or {}).get('kind') == 'g6' else None   # 先頭 6 層の読み手の一式（読み手は 1 つ。エンコーダのフォルダは要らない）
+        if not g6 and encoder is None:
+            raise ValueError('この一式には、エンコーダのフォルダが要る')
+        encoder = None if g6 else Path(encoder)
+        # 節のベクトル: 番号のまま fp32 で持つ（約 39 MB）。node_s は、番号に掛けて長さ 1 のベクトルとの内積にする数
+        self.node, self.node_s = (unpack4(sec('node4')).astype(np.float32), sec('node4.n')) if g6 else (sec('node').astype(np.float32), sec('node.s'))
         torch.set_num_threads(2)                                                      # 小さいモデルなので、スレッドを増やすと待ち合わせでかえって遅くなる
 
         def reader(pre, folder, calib, calib_prefix):
             """文を読む層ひとつ分: 問いの射影・目盛り・確度の係数と、エンコーダ（先頭トークンの状態を返す関数）。語の埋め込みと節のベクトルは、どの層でも同じ。"""
+            from transformers import AutoModel
             w = sec(pre + 'q_proj')                                                   # [16 出力ごとのブロック, 入力, 16] → [出力, 入力]
             model = AutoModel.from_pretrained(folder).eval()
 
@@ -91,7 +154,15 @@ class Zeiban:
             return {'q_w': w.transpose(0, 2, 1).reshape(-1, D).astype(np.float32) * sec(pre + 'q_proj.s')[:, None], 'q_b': sec(pre + 'q_proj.b'), 'scale': sec(pre + 'scale'), 'lam': sec(pre + 'lam'),
                     'state': state, 'calib': calib, 'calibPrefix': calib_prefix}
 
-        self.base = reader('', encoder, man.get('calib'), man.get('calibPrefix'))
+        if g6:
+            self.base = {'q_w': unpack4_lin(sec('g.q_proj')).astype(np.float32) * sec('g.q_proj.s')[:, None], 'q_b': sec('g.q_proj.b'), 'scale': sec('g.scale'), 'lam': sec('g.lam'),
+                         'state': g6_state(sec, g6['layers']), 'calib': man.get('calib'), 'calibPrefix': man.get('calibPrefix')}
+            self.gtk, self.gid = Tokenizer.from_file(str(bundle / g6['tokenizer'])), sec('g.tok.id').astype(np.int64)      # 読み手の語の区切り（絞った語彙。番号はもとのまま）と、もとの番号 → 語の表の行
+            self.gtk.no_padding()
+            self.gtk.enable_truncation(max_length=man['q_len'])
+        else:
+            self.base = reader('', encoder, man.get('calib'), man.get('calibPrefix'))
+        self.g6 = g6
         self.ja, self.ja_share = None, None                                           # 日本語の入力を読む 2 つ目の層（目録の route.ja。無い一式では、全部の入力をもとの層で読む）
         route = (man.get('route') or {}).get('ja')
         if route:
@@ -110,7 +181,7 @@ class Zeiban:
         self.tf[big[:, 0]] = big[:, 1]
         self.idf, self.ent = sec('bmx.idf'), sec('bmx.ent')
         self.avgdl, self.alpha, self.beta, self.norm1 = (float(x) for x in sec('bmx.const'))
-        self.tk = Tokenizer.from_file(str(encoder / 'tokenizer.json'))
+        self.tk = Tokenizer.from_file(str(bundle / g6['bmx_tokenizer'] if g6 else encoder / 'tokenizer.json'))      # 語の一致（BMX）の語の区切り
         self.tk.no_padding()
         self.tk.no_truncation()
 
@@ -133,11 +204,16 @@ class Zeiban:
         o = np.lexsort((hit, -s))[:self.man['k']]
         return hit[o], (s[o] / (m * self.norm1)).astype(np.float32)
 
-    def predict(self, text, lex, k=5, prefix=''):
-        """→ 上位 k 件の (葉の番号, 葉の点, 読んだ層)。葉の点 = 5 段の log softmax(scale × cos + λ × BMX) を、道筋に沿って足したもの。
+    def predict(self, text, lex, k=5, prefix='', full=False):
+        """→ 上位 k 件の (葉の番号, 葉の点, 読んだ層)。full なら、4 つ目に (葉の点の全部, prefix の中の葉の番号) を足す（質問の候補を、枝の中から取り直すのに使う）。葉の点 = 5 段の log softmax(scale × cos + λ × BMX) を、道筋に沿って足したもの。
         日本語の入力（is_ja）は、2 つ目の層のある一式では、その層で読む。"""
         r = self.ja if self.ja is not None and is_ja(lex, self.ja_share) else self.base
-        ids = [self.man['tok']['bos']] + self.tk.encode(text, add_special_tokens=False).ids[:self.man['q_len'] - 2] + [self.man['tok']['eos']]
+        if self.g6:                                                                   # 文の頭に決まった文を付け、前後に印を付けて、q_len までに切る。もとの番号 → 語の表の行
+            raw = np.asarray(self.gtk.encode(self.g6['text_prefix'] + text).ids, np.int64)
+            ids = np.searchsorted(self.gid, raw)
+            assert (self.gid[ids] == raw).all()
+        else:
+            ids = [self.man['tok']['bos']] + self.tk.encode(text, add_special_tokens=False).ids[:self.man['q_len'] - 2] + [self.man['tok']['eos']]
         q = (r['q_w'].astype(np.float64) @ r['state'](ids) + r['q_b']).reshape(LEVELS, D)
         q = (q / np.maximum(np.linalg.norm(q, axis=1, keepdims=True), 1e-12)).astype(np.float32)
         leaf, val = self.bmx_top(lex)
@@ -150,10 +226,11 @@ class Zeiban:
             score += (s - (s.max() + math.log(np.exp(s - s.max()).sum()))).astype(np.float32)[self.leaf_path[:, t]]
         idx = np.flatnonzero(np.char.startswith(self.codes, prefix)) if prefix else np.arange(self.n_nodes[4])
         top = idx[np.lexsort((idx, -score[idx]))[:k]]
-        return top, score[top], r
+        return (top, score[top], r, (score, idx)) if full else (top, score[top], r)
 
-    def respond(self, top, score, fixed=0, reader=None):
-        """上位の候補 → 応答。fixed は、呼び手がもう答えた段の数（prefix の桁 ÷ 2）。reader は predict の返す「読んだ層」（確度の係数を持つ。無ければ、もとの層）。"""
+    def respond(self, top, score, fixed=0, reader=None, wide=None, full=None, confirm=False):
+        """上位の候補 → 応答。fixed は、呼び手がもう答えた段の数（prefix の桁 ÷ 2）。reader は predict の返す「読んだ層」（確度の係数を持つ。無ければ、もとの層）。
+        wide は、質問を作る広い候補の (葉の番号, 葉の点)（top を頭に含む、点の高い順の QN 葉。無ければ top と同じ）。full は predict の返す (葉の点の全部, prefix の中の葉の番号)。"""
         reader = reader or self.base
         man, lp = self.man, self.leaf_path
         label = lambda leaf, t: self.labels[self.offs[t] + lp[leaf, t]]
@@ -180,10 +257,30 @@ class Zeiban:
         out['dutyRate'] = duty(first)
         out['alternates'] = [{'code': code(i), 'description': desc(i), 'probabilityMass': float(q), 'dutyRate': duty(i)} for i, q in zip(top[1:], p[1:])]
         out['questions'] = []
-        t = next((t for t in range(LEVELS) if (lp[top, t] != lp[first, t]).any()), None)     # 質問: 候補の頭の桁が分かれる最初の段
+        # 質問: 確度が tau より低い最初の段 t0 を聞く（自信のある段は飛ばす）。候補は、1 位と t0 の上まで同じ葉のうち、点の高い QN 葉。その候補の頭の桁が分かれる最初の段が質問になる。
+        # どの段も確度が tau 以上のとき（と、合わせ込みの無い一式）は、広い候補（上位 QN 葉）が分かれる最初の段。確率は、候補の中での割合
+        wtop, wscore = wide if wide is not None else (top, score)
+        split = lambda pool, start: next((t for t in range(start, LEVELS) if (lp[pool, t] != lp[first, t]).any()), None)
+        t, t0 = None, next((t for t in range(fixed, LEVELS) if conf[t] < man['tau']), None) if conf and not confirm else None      # confirm: 自信のある段も飛ばさず、上の段から順に聞く
+        if t0 is not None:
+            wt, ws = np.asarray(wtop), np.asarray(wscore)
+            if t0 and full is not None:                                               # 1 位と t0 の上まで同じ葉から、点の高い QN 葉を取り直す
+                ix = full[1][lp[full[1], t0 - 1] == lp[first, t0 - 1]]
+                pool = ix[np.lexsort((ix, -full[0][ix]))[:QN]]
+                psc = full[0][pool]
+            else:                                                                     # t0 が一番上の段か、葉の点の全部が無い: 広い候補のうち、枝の中のもの
+                keep = lp[wt, t0 - 1] == lp[first, t0 - 1] if t0 else np.ones(len(wt), bool)
+                pool, psc = wt[keep], ws[keep]
+            t = split(pool, t0)
+            if t is not None:
+                wtop, wscore = pool, psc
+        if t is None:
+            t = split(wtop, 0)
+        pw = np.exp((np.asarray(wscore, np.float64) - best) / man['temp'])
+        pw /= pw.sum()
         if t is not None:
             opts = {}
-            for i, q in zip(top, p):
+            for i, q in zip(wtop, pw):
                 o = opts.setdefault(int(lp[i, t]), [int(i), 0.0])
                 o[1] += float(q)
             c = conf[t] if conf else next(iter(opts.values()))[1]
@@ -199,8 +296,8 @@ class Zeiban:
         if not (isinstance(prefix, str) and (prefix == '' or prefix.isascii() and prefix.isdigit() and len(prefix) in (2, 4, 6, 8, 10))):
             raise ValueError('prefix は 2・4・6・8・10 桁の数字')
         text, lex = build(item)
-        top, score, reader = self.predict(text, lex, k, prefix)
-        return self.respond(top, score, len(prefix) // 2, reader)
+        top, score, reader, full = self.predict(text, lex, max(k, QN), prefix, full=True)   # 質問を作るために、応答に出す k 件より広く取る
+        return self.respond(top[:k], score[:k], len(prefix) // 2, reader, (top, score), full, item.get('confirm') is True)
 
 
 def demo():
@@ -214,13 +311,11 @@ def demo():
 def main():
     ap = argparse.ArgumentParser(description='zeiban: 商品の文から米国 HTS の 10 桁を出す（標準入力に 1 行 1 件の JSON）')
     ap.add_argument('bundle', help='zeiban.bin と zeiban.json のあるフォルダ。demo と書くと自己確認だけ')
-    ap.add_argument('encoder', nargs='?', help='transformers で読むエンコーダのフォルダ（リリースの zeiban-encoder）')
+    ap.add_argument('encoder', nargs='?', help='transformers で読むエンコーダのフォルダ（リリースの zeiban-encoder。先頭 6 層の読み手の一式では要らない）')
     ap.add_argument('-k', type=int, default=5, help='上位の件数')
     a = ap.parse_args()
     if a.bundle == 'demo':
         return demo()
-    if not a.encoder:
-        ap.error('エンコーダのフォルダが要る')
     z = Zeiban(a.bundle, a.encoder)
     for line in sys.stdin:
         if line.strip():

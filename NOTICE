@@ -11,8 +11,19 @@ copied unchanged from Budget-Lab-Yale/tariff-rate-tracker
 which is distributed under the MIT License. Copyright (c) 2025-2026 The Budget
 Lab at Yale. The license text is in releases/LICENSE.Budget-Lab-Yale.
 
-The model bundle (zeiban.bin) and the encoder files (zeiban-encoder), both
-distributed as release assets, contain the following third-party material.
+The model bundle (zeiban.bin, with tokenizer.json and bmx-tokenizer.json) and,
+up to v0.2.1, the encoder files (zeiban-encoder), all distributed as release
+assets, contain the following third-party material.
+
+- From v0.3.0, the reader (weights, token embeddings and tokenizer) is derived
+  from google/embeddinggemma-2
+  (https://huggingface.co/google/embeddinggemma-2, revision f9972ac2),
+  distributed under the Apache License, Version 2.0. Changes: only the first
+  six layers of the text encoder are kept, the model was fine-tuned for
+  tariff classification, the weights were quantized to 4 bits, and the
+  vocabulary was reduced to 49,106 tokens. The upstream model card states:
+  "Deployments must adhere to the Gemma Prohibited Use Policy"
+  (https://ai.google.dev/gemma/prohibited_use_policy).
 
 - Weights, vocabulary and tokenizer derived from cl-nagoya/ruri-v3-30m
   (https://huggingface.co/cl-nagoya/ruri-v3-30m), distributed under the Apache
@@ -20,7 +31,10 @@ distributed as release assets, contain the following third-party material.
   (https://huggingface.co/sbintuitions/modernbert-ja-30m), distributed under
   the MIT License. Changes: ten layers were averaged into three, the model was
   fine-tuned for tariff classification, and the weights were quantized to
-  int8.
+  int8. From v0.3.0 the bundle no longer contains this encoder; the vocabulary
+  and tokenizer of the lexical index, and the node vectors (first computed
+  with this encoder, then trained further and quantized to 4 bits), remain
+  derived from it.
 
 - A lexical index and weights trained on "CROSS Rulings HTS Dataset for Tariff
   Classification by Flexify.AI Inc. (https://www.flexify.ai)", distributed
@@ -41,12 +55,29 @@ distributed as release assets, contain the following third-party material.
   United States Government) was used to write training examples. The ruling
   texts are not redistributed.
 
+- From v0.3.0, weights trained on product names and descriptions extracted
+  from U.S. Customs and Border Protection rulings in
+  fklc/cbp-rulings-past-2012
+  (https://huggingface.co/datasets/fklc/cbp-rulings-past-2012), distributed
+  under the MIT License. Rows that appear to come from the same rulings as
+  the evaluation items were left out, and the rulings dated 2025-10-01 or
+  later were kept for evaluation only. The dataset is not redistributed.
+
 - Advance classification rulings published by Japan Customs were used to train
-  the second (Japanese) reader and to evaluate Japanese input. Source: Japan
-  Customs website (https://www.customs.go.jp/), "Advance Classification Ruling
-  Cases" search results; the listing was processed (product name, description
-  and the first six digits of the tariff number). The texts are not
-  redistributed.
+  the reader (in v0.2.x, the second, Japanese reader) and to evaluate Japanese
+  input. Source: Japan Customs website (https://www.customs.go.jp/), "Advance
+  Classification Ruling Cases" search results; the listing was processed
+  (product name, description and the first six digits of the tariff number).
+  The texts are not redistributed.
+
+- From v0.3.0, Advance Tariff Rulings published by HM Revenue & Customs
+  (United Kingdom) were used for training. Source: "Search for Advance Tariff
+  Rulings" (https://www.tax.service.gov.uk/search-for-advance-tariff-rulings);
+  the listing was processed (description and the first six digits of the
+  commodity code). Contains public sector information licensed under the Open
+  Government Licence v3.0
+  (https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+  The texts are not redistributed.
 
 Part of the training data was written or labelled with large language models
 (Anthropic Claude Haiku 5.5 and Google Gemini Decision 1).

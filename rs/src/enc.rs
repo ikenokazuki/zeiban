@@ -19,7 +19,7 @@ const EPS: f32 = 1e-5;
 const WINDOW: usize = 64;
 const MAX_LEN: usize = 256;
 
-fn avx_on() -> bool {
+pub(crate) fn avx_on() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| {
         #[cfg(target_arch = "x86_64")]

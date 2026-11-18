@@ -19,7 +19,7 @@ export async function load(wasm, manifest, bundle) {
   if (rc !== 0) throw new Error(`zeiban: ${out()}`);
   const enc = new TextEncoder();
   return {
-    /** req: {name, material?, categories?, description?, prefix?} → 応答。k は上位の件数（確度は 5 で合わせてある） */
+    /** req: {name, material?, categories?, description?, prefix?, confirm?} → 応答。k は上位の件数（確度は 5 で合わせてある） */
     classify(req, k = 5) {
       const b = enc.encode(JSON.stringify(req));
       const p = put(b);

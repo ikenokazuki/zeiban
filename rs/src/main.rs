@@ -2,7 +2,7 @@
 // 一式（zeiban.bin と目録 zeiban.json。リリースで配る）をメモリにマップして読み、1 件ごとに全部を自分で行う:
 //   語彙の点（NFKC・小文字 → 語の区切り → BMX の上位 64 葉）→ モデルの語の区切り（256 トークンまで）→ 3 層のエンコーダ
 //   → 5 段の点（scale × cos + λ × BMX）→ 葉の点（段ごとの対数確率の和）。計算は、学習のときの Python の実装と同じ。
-// 使い方: zeiban <一式のフォルダ> [k | debug | bench]
+// 使い方: zeiban <一式のフォルダ> [k | debug | bench | ids]
 //   標準入力に 1 行 1 件の JSON。2 通り:
 //     {"name": 品名, "material": 素材, "categories": 分類（文か、文の並び）, "description": 説明}（name のほかは無くてよい）
 //       → モデルに渡す文は「title: 品名 | material: 素材 | category: 分類 | description: 説明」（学習のときの EC の文と同じ形。素材・分類は品名のすぐ後に置く。
@@ -15,16 +15,20 @@
 //     confidenceScore は 1 位の 10 桁が正しい確率、sixDigitConfidence は 6 桁までが正しい確率（調整用の行で合わせ込んだ値。目録の calib・calibPrefix）。
 //       prefix つきの呼び直しでは、呼び手の答えは正しいとして出す（答えた段の確度は 1）。
 //     dutyRate {general, special, other}: 関税表の基本の税率の欄（公式の文字のまま）。第 99 類の追加の関税（232 条・301 条など）・不当廉売の関税・脚注は入らない = 実際に払う額ではない。
-//     questions: 上位 k 件の頭の桁が分かれる最初の段の質問（0 か 1 個）。{digits, ask, confidence, options: [{prefix, label, code, probabilityMass, dutyRate}]}。
+//     questions: 質問（0 か 1 個）。確度が tau より低い最初の段を聞く（自信のある段は飛ばす）。候補は、1 位とその上の段まで同じ葉のうち点の高い 30 葉（QN。応答に出す k 件より広い）。
+//       どの段も確度が tau 以上なら、上位 30 葉の頭の桁が分かれる最初の段（聞く目安は立たない）。
+//       入力に "confirm": true を足すと、自信のある段も飛ばさず、いつも「上位 30 葉の頭の桁が分かれる最初の段」を聞く（上の段から順に全部を確かめたい呼び手のため）。{digits, ask, confidence, options: [{prefix, label, code, probabilityMass, dutyRate}]}。
 //       選択肢の文（label）は関税表の公式の文。code は「これを選んだらこのコード」。confidence は 1 位の選択肢が正しい確率、ask は、それが目録の tau より低いとき true（聞く目安）。
 //     probabilityMass は、上位 k 件の葉の点の softmax（目録の temp で割る）。候補の中での割合で、合わせ込みをした確率ではない。
 //   debug: トークンの番号（ids）・BMX の上位（bmx: [葉の番号, 点]）・語彙の点の前処理をした文（norm）・計算の経路（path）も出す（Python の基準との照合用）。
+//   ids: モデルに渡すトークンの番号だけを出す（モデルは動かさない。語の区切りの照合用）。
 //   bench: 全部の行を読んでから 1 件ずつ時間を測り、1 行の JSON（読み込みの時間・常駐メモリ・スレッドの数・計算の経路・件ごとの [トークン数, マイクロ秒]）を出す。
 // 計算は 2 スレッド（rayon の 2 本の中で全部を動かす）。エンコーダの計算の経路は、CPU に AVX2 と FMA があれば avx2、無ければ portable（どの CPU でも動く。enc.rs）。
 // 環境変数 ZEIBAN_PORTABLE を置くと、いつも portable を使う。
 // WebAssembly（wasm32-unknown-unknown。rs/build-wasm.sh）では、実行ファイルの代わりに、呼び出す口を出す（下の mod wasm）。
 //   ファイルも標準入出力も使わない: 呼び手が、目録と一式の中身を wasm のメモリに書いて渡す。入力と応答は、上の JSON の 1 行と同じ。スレッドは 1 本。
 mod enc;
+mod enc_g;
 mod tok;
 
 use anyhow::{bail, Context, Result};
@@ -163,9 +167,10 @@ struct Model {
     nfkc: tok::Nfkc,
     term: &'static [u16], // 片の番号 → 語彙の点の語の番号
     bmx: Bmx,
-    enc: enc::Engine,
-    node: &'static [i8],
-    node_s: &'static [f32],
+    enc: Reader,
+    node: &'static [i8],  // 節のベクトル（int8）。先頭 6 層の読み手の一式では空
+    node4: &'static [u8], // 節のベクトル（int4。1 バイトに 2 個）。先頭 6 層の読み手の一式だけ
+    node_s: &'static [f32], // 節ごとの数: 内積に掛けると、長さ 1 の節のベクトルとの内積になる
     n_nodes: Vec<usize>,
     scale: &'static [f32],
     lam: &'static [f32],
@@ -181,6 +186,12 @@ struct Model {
     leaf_duty: &'static [u16],    // 葉 → duty の行の番号
     calib: Option<[[[f64; 4]; 5]; 2]>, // 確度の係数（段ごとの a・b・c・d）。[0] は最初の応答、[1] は prefix つきの呼び直し。無ければ、合わせ込みをしない
     alt: Option<Alt>,                  // 日本語の入力を読む 2 つ目の層（目録の route.ja。無い一式では、全部の入力をもとの層で読む）
+}
+
+// 文を読む層。目録の enc.kind が g6 の一式は、先頭 6 層の読み手（int4。語の区切りは BPE。文の頭に決まった文を付ける）。それ以外は、もとの 3 層の読み手
+enum Reader {
+    Mb(enc::Engine),
+    G6 { eng: enc_g::Engine, bpe: tok::Bpe, pre: String },
 }
 
 // 2 つ目の層: 文を読む層・問いの射影・目盛り・確度の係数だけが別。語の埋め込み・節のベクトル・索引は、もとの層と同じものを使う
@@ -207,10 +218,28 @@ fn is_ja(s: &str, share: f64) -> bool {
     n > 0 && ja as f64 >= share * n as f64
 }
 
+// 質問を作る候補の葉の数。応答に出す上位 k 件（既定 5）とは別に、点の高い順にこの数まで見て、頭の桁が分かれる最初の段を質問にする。
+// 5 件だけから作ると、正解の枝が選択肢に出ないことが多い（新しい判例の文で、質問 3 回までの 10 桁は 5 件 0.70・30 件 0.79）
+const QN: usize = 30;
+
+// 葉の点（-inf は対象の外）から、keep が真の葉の上位 n 件（点の高い順、同じ点は番号の小さい順）
+fn pick(leaf: &[f32], n: usize, keep: impl Fn(usize) -> bool) -> Vec<(f32, usize)> {
+    let mut top: Vec<(f32, usize)> = leaf.iter().enumerate().filter(|&(i, x)| *x > f32::NEG_INFINITY && keep(i)).map(|(i, x)| (*x, i)).collect();
+    let cmp = |x: &(f32, usize), y: &(f32, usize)| y.0.total_cmp(&x.0).then(x.1.cmp(&y.1));
+    let n = n.min(top.len());
+    if n < top.len() {
+        top.select_nth_unstable_by(n, cmp);
+        top.truncate(n);
+    }
+    top.sort_unstable_by(cmp);
+    top
+}
+
 struct Pred {
     ids: Vec<u32>,
     bmx: Vec<(u16, f32)>,
-    top: Vec<(f32, usize)>, // (葉の点, 葉の番号)
+    top: Vec<(f32, usize)>, // (葉の点, 葉の番号)。点の高い順に max(k, QN) 件まで
+    leaf: Vec<f32>,         // 葉の点の全部（prefix の外の葉は -inf）。質問の候補を、枝の中から取り直すのに使う
     ja: bool,               // 2 つ目の層（日本語）で読んだか
 }
 
@@ -223,6 +252,7 @@ impl Model {
     fn from_bundle(b: &'static Bundle) -> Result<Self> {
         let num = |k: &str| b.man[k].as_u64().map(|x| x as usize).with_context(|| format!("目録の {k}"));
         let n_nodes: Vec<usize> = b.man["n_nodes"].as_array().context("目録の n_nodes")?.iter().map(|x| x.as_u64().unwrap_or(0) as usize).collect();
+        let g6 = b.man["enc"]["kind"] == "g6";
         let m = Self {
             tok: tok::Tokenizer::new(b)?,
             nfkc: tok::Nfkc::new(b),
@@ -238,11 +268,16 @@ impl Model {
                 cst: b.get("bmx.const"),
                 acc: vec![[0.0; 3]; n_nodes[4]],
             },
-            enc: enc::Engine::new(b)?,
-            node: b.get("node"),
-            node_s: b.get("node.s"),
-            scale: b.get("scale"),
-            lam: b.get("lam"),
+            enc: if g6 {
+                Reader::G6 { eng: enc_g::Engine::new(b)?, bpe: tok::Bpe::new(b)?, pre: b.man["enc"]["text_prefix"].as_str().unwrap_or("").to_string() }
+            } else {
+                Reader::Mb(enc::Engine::new(b)?)
+            },
+            node: if g6 { &[] } else { b.get("node") },
+            node4: if g6 { b.get("node4") } else { &[] },
+            node_s: b.get(if g6 { "node4.n" } else { "node.s" }),
+            scale: b.get(if g6 { "g.scale" } else { "scale" }),
+            lam: b.get(if g6 { "g.lam" } else { "lam" }),
             leaf_path: b.get("leaf_path"),
             leaves: b.get("leaves"),
             q_len: num("q_len")?,
@@ -276,7 +311,7 @@ impl Model {
             n_nodes,
         };
         let total: usize = m.n_nodes.iter().sum();
-        if m.n_nodes.len() != 5 || m.node.len() != total * D || m.node_s.len() != total || m.leaf_path.len() != m.n_nodes[4] * 5 || m.leaves.len() != m.n_nodes[4] * 10 {
+        if m.n_nodes.len() != 5 || m.node.len() + m.node4.len() * 2 != total * D || m.node_s.len() != total || m.leaf_path.len() != m.n_nodes[4] * 5 || m.leaves.len() != m.n_nodes[4] * 10 {
             bail!("節・葉の数が目録と合わない");
         }
         if !m.labels.is_empty() && m.labels.len() != total {
@@ -286,6 +321,20 @@ impl Model {
             bail!("税率の区画が葉の数と合わない");
         }
         Ok(m)
+    }
+
+    // モデルに渡すトークンの番号（頭と尻の印つき。長い文は後ろを切る）
+    fn ids(&self, text: &str) -> Vec<u32> {
+        match &self.enc {
+            // 先頭 6 層の読み手: 決まった文 ＋ 文 を BPE で区切る
+            Reader::G6 { bpe, pre, .. } => bpe.encode(&format!("{pre}{text}"), self.q_len),
+            Reader::Mb(_) => {
+                let mut ids = vec![self.tok.bos];
+                ids.extend(self.tok.encode(text).into_iter().take(self.q_len - 2));
+                ids.push(self.tok.eos);
+                ids
+            }
+        }
     }
 
     fn predict(&mut self, text: &str, lex: &str, k: usize, prefix: &[u8]) -> Pred {
@@ -299,17 +348,22 @@ impl Model {
             }
         }
         let bmx = self.bmx.top(&terms, self.k);
-        // モデルの入力: <s> 文 </s>（長い文は後ろを切る）
-        let mut ids = vec![self.tok.bos];
-        ids.extend(self.tok.encode(text).into_iter().take(self.q_len - 2));
-        ids.push(self.tok.eos);
-        // 日本語の入力は 2 つ目の層で読む（ある一式だけ）。それ以外は、もとの層
-        let ja = self.alt.as_ref().is_some_and(|a| is_ja(lex, a.share));
-        let (eng, scale, lam) = match &self.alt {
-            Some(a) if ja => (&a.enc, a.scale, a.lam),
-            _ => (&self.enc, self.scale, self.lam),
+        let (mut ja, mut scale, mut lam) = (false, self.scale, self.lam);
+        let ids = self.ids(text);
+        let q = match &self.enc {
+            Reader::G6 { eng, .. } => eng.query(&ids),
+            // 日本語の入力は 2 つ目の層で読む（ある一式だけ）。それ以外は、もとの層
+            Reader::Mb(base) => {
+                ja = self.alt.as_ref().is_some_and(|a| is_ja(lex, a.share));
+                match &self.alt {
+                    Some(a) if ja => {
+                        (scale, lam) = (a.scale, a.lam);
+                        a.enc.query(&ids)
+                    }
+                    _ => base.query(&ids),
+                }
+            }
         };
-        let q = eng.query(&ids);
         // 段ごとの点 → 対数確率。節の BMX の点は、その下の葉の点の最大（無ければ 0）
         let total = self.node_s.len();
         let (mut s, mut bm) = (vec![0f32; total], vec![0f32; total]);
@@ -318,7 +372,11 @@ impl Model {
         for t in 0..5 {
             let n = self.n_nodes[t];
             offs[t] = at;
-            enc::dots(&q[t * D..][..D], &self.node[at * D..][..n * D], &mut s[at..at + n]);
+            if self.node4.is_empty() {
+                enc::dots(&q[t * D..][..D], &self.node[at * D..][..n * D], &mut s[at..at + n]);
+            } else {
+                enc_g::dots4(&q[t * D..][..D], &self.node4[at * D / 2..][..n * D / 2], &mut s[at..at + n]);
+            }
             for &(leaf, v) in &bmx {
                 let j = at + self.leaf_path[leaf as usize * 5 + t] as usize;
                 bm[j] = bm[j].max(v);
@@ -336,15 +394,9 @@ impl Model {
         }
         // 葉の点 = 道の節の対数確率の和。上位 k 件（点の高い順、同じ点は番号の小さい順）
         // prefix があれば、その頭の桁の葉だけ（質問に答えたあとの呼び直し）
-        let mut top: Vec<(f32, usize)> = self.leaf_path.chunks_exact(5).enumerate().filter(|(i, _)| self.leaves[i * 10..].starts_with(prefix)).map(|(i, p)| ((0..5).fold(0f32, |a, t| a + s[offs[t] + p[t] as usize]), i)).collect();
-        let cmp = |x: &(f32, usize), y: &(f32, usize)| y.0.total_cmp(&x.0).then(x.1.cmp(&y.1));
-        let k = k.min(top.len());
-        if k < top.len() {
-            top.select_nth_unstable_by(k, cmp);
-            top.truncate(k);
-        }
-        top.sort_unstable_by(cmp);
-        Pred { ids, bmx, top, ja }
+        let leaf: Vec<f32> = self.leaf_path.chunks_exact(5).enumerate().map(|(i, p)| if self.leaves[i * 10..].starts_with(prefix) { (0..5).fold(0f32, |a, t| a + s[offs[t] + p[t] as usize]) } else { f32::NEG_INFINITY }).collect();
+        let top = pick(&leaf, k.max(QN), |_| true); // 質問を作るために、応答に出す k 件より広く取る（応答の欄は、呼び手の側で頭の k 件だけを使う）
+        Pred { ids, bmx, top, leaf, ja }
     }
 }
 
@@ -373,7 +425,9 @@ impl Model {
 
     // 上位の候補 → 応答の欄（hsCode・sixDigit・confidenceScore・sixDigitConfidence・dutyRate・alternates・questions）。
     // 確率（probabilityMass）は、候補の葉の点の softmax（temp で割る）。fixed は、呼び手がもう答えた段の数（prefix の桁 ÷ 2）
-    fn respond(&self, top: &[(f32, usize)], fixed: usize, ja: bool, o: &mut Value) {
+    // wide は、質問を作る広い候補（top を頭に含む、点の高い順の QN 葉）。leaf は、葉の点の全部
+    // confirm は、自信のある段も飛ばさずに、上の段から順に聞く（呼び手が入力に "confirm": true を足したとき）
+    fn respond(&self, top: &[(f32, usize)], wide: &[(f32, usize)], leaf: &[f32], fixed: usize, ja: bool, confirm: bool, o: &mut Value) {
         let Some(&(best, first)) = top.first() else { return };
         let w: Vec<f64> = top.iter().map(|x| ((x.0 as f64 - best as f64) / self.temp).exp()).collect();
         let sum: f64 = w.iter().sum();
@@ -402,12 +456,22 @@ impl Model {
             o["dutyRate"] = self.duty_rate(first);
         }
         o["alternates"] = top.iter().zip(&p).skip(1).map(|(x, q)| json!({ "code": self.code(x.1), "description": self.description(x.1), "probabilityMass": q, "dutyRate": self.duty_rate(x.1) })).collect();
-        // 質問: 候補の頭の桁が分かれる最初の段。選択肢は、点の高い候補の順
+        // 質問: 確度が tau より低い最初の段 t0 を聞く（自信のある段は飛ばす）。候補は、1 位と t0 の上まで同じ葉のうち、点の高い QN 葉。その候補の頭の桁が分かれる最初の段が質問になる。
+        // どの段も確度が tau 以上のとき（と、合わせ込みの無い一式）は、広い候補（上位 QN 葉）が分かれる最初の段（聞く目安は、その段の確度で決まる）。
+        // 選択肢は、点の高い候補の順。確率は、候補の中での割合
+        let split = |pool: &[(f32, usize)], from: usize| (from..5).find(|&t| pool.iter().any(|x| self.leaf_path[x.1 * 5 + t] != self.leaf_path[first * 5 + t]));
+        let focus = conf.filter(|_| !confirm).and_then(|v| (fixed.min(5)..5).find(|&t| v[t] < self.tau)).and_then(|t0| {
+            let pool = if t0 == 0 { wide.to_vec() } else { pick(leaf, QN, |i| self.leaf_path[i * 5 + t0 - 1] == self.leaf_path[first * 5 + t0 - 1]) };
+            split(&pool, t0).map(|t| (t, pool))
+        });
         let mut qs = Vec::new();
-        if let Some(t) = (0..5).find(|&t| top.iter().any(|x| self.leaf_path[x.1 * 5 + t] != self.leaf_path[first * 5 + t])) {
+        if let Some((t, wide)) = focus.or_else(|| split(wide, 0).map(|t| (t, wide.to_vec()))) {
             let d = 2 * t + 2;
+            let ww: Vec<f64> = wide.iter().map(|x| ((x.0 as f64 - best as f64) / self.temp).exp()).collect();
+            let wsum: f64 = ww.iter().sum();
+            let pw: Vec<f64> = ww.iter().map(|x| x / wsum).collect();
             let mut opts: Vec<(usize, f64)> = Vec::new(); // (その選択肢で一番点の高い葉, 確率の合計)
-            for (x, q) in top.iter().zip(&p) {
+            for (x, q) in wide.iter().zip(&pw) {
                 match opts.iter_mut().find(|y| self.leaf_path[y.0 * 5 + t] == self.leaf_path[x.1 * 5 + t]) {
                     Some(y) => y.1 += q,
                     None => opts.push((x.1, *q)),
@@ -460,9 +524,10 @@ fn answer(m: &mut Model, line: &str, k: usize, debug: bool) -> Result<String> {
         bail!("prefix は 2・4・6・8・10 桁の数字");
     }
     let p = m.predict(&text, &lex, k, prefix.as_bytes());
-    let codes: Vec<&str> = p.top.iter().map(|&(_, i)| m.code(i)).collect();
-    let mut o = json!({ "codes": codes, "scores": p.top.iter().map(|x| x.0).collect::<Vec<_>>(), "htsRelease": m.release });
-    m.respond(&p.top, prefix.len() / 2, p.ja, &mut o);
+    let head = &p.top[..k.min(p.top.len())]; // 応答に出すのは上位 k 件。質問は、広い候補（p.top の全部）から作る
+    let codes: Vec<&str> = head.iter().map(|&(_, i)| m.code(i)).collect();
+    let mut o = json!({ "codes": codes, "scores": head.iter().map(|x| x.0).collect::<Vec<_>>(), "htsRelease": m.release });
+    m.respond(head, &p.top, &p.leaf, prefix.len() / 2, p.ja, v["confirm"].as_bool().unwrap_or(false), &mut o);
     if p.ja {
         o["reader"] = json!("ja"); // 2 つ目の層（日本語）で読んだ印。もとの層で読んだ応答には、この欄を足さない（前の版と同じ形のまま）
     }
@@ -572,6 +637,12 @@ fn run() -> Result<()> {
         }
         if mode == "bench" {
             reqs.push(build(&serde_json::from_str(&line)?)?);
+            continue;
+        }
+        if mode == "ids" {
+            // 語の区切りだけ（モデルは動かさない）: モデルに渡すトークンの番号を出す（Python の基準との照合用）
+            let (text, _) = build(&serde_json::from_str(&line)?)?;
+            writeln!(out, "{}", json!(m.ids(&text)))?;
             continue;
         }
         let o = answer(&mut m, &line, k, mode == "debug")?;

@@ -119,6 +119,151 @@ impl Tokenizer {
 
 const HANGUL: u32 = 0xAC00; // ハングルの音節（11,172 字 = 初声 19 × 中声 21 × 終声 28）は式で分解・合成する
 
+// 先頭 6 層の読み手（目録の enc.kind が g6）の語の区切り: BPE。Hugging Face の tokenizers の BPE（byte_fallback・結合は順位の小さい順）と同じトークンの番号を作る。
+// - 特別な印（<bos> など）の文字列が本文にそのまま出てきたら、先に切り出して、その印の番号にする（最左・最長）。
+// - 残りは、半角空白を ▁ に置き換え、1 字ずつの語にする（語彙に無い字は、UTF-8 のバイトの語 <0xXX> に分ける）。空白では区切らない（文の全部が 1 つの語）。
+// - 隣り合う 2 つの語に結合の決まりがあれば、順位の小さいものから（同じ順位は左から）つなぐ。つないでできた語と両隣の組も、決まりがあれば候補に足す。
+// 語の番号は、絞った語彙の中での番号（語の表の行）。表は一式の区画（マップしたまま、2 分探索で引く。写しを持たない）:
+//   g.tok.char [字の数][2]: 字の符号位置・番号（符号位置の小さい順）／g.tok.byte [256]: バイトの語の番号／g.tok.merge [決まりの数][4]: 左・右・順位・つないだ語の番号（(左, 右) の小さい順）
+pub struct Bpe {
+    chars: &'static [u32],
+    bytes: &'static [u32],
+    merges: &'static [u32],
+    special: Vec<(String, u32)>,
+    pub bos: u32,
+    pub eos: u32,
+}
+
+impl Bpe {
+    pub fn new(b: &'static Bundle) -> Result<Self> {
+        let e = &b.man["enc"];
+        let id = |k: &str| e[k].as_u64().map(|x| x as u32).with_context(|| format!("目録の enc.{k}"));
+        let mut special = Vec::new();
+        for a in e["special"].as_array().context("目録の enc.special")? {
+            special.push((a[0].as_str().context("enc.special")?.to_string(), a[1].as_u64().context("enc.special")? as u32));
+        }
+        let t = Self { chars: b.get("g.tok.char"), bytes: b.get("g.tok.byte"), merges: b.get("g.tok.merge"), special, bos: id("bos")?, eos: id("eos")? };
+        if t.chars.len() % 2 != 0 || t.bytes.len() != 256 || t.merges.len() % 4 != 0 {
+            anyhow::bail!("語の区切りの区画の形が違う");
+        }
+        Ok(t)
+    }
+
+    fn ch(&self, c: u32) -> Option<u32> {
+        let (mut lo, mut hi) = (0, self.chars.len() / 2);
+        while lo < hi {
+            let m = (lo + hi) / 2;
+            match self.chars[m * 2].cmp(&c) {
+                std::cmp::Ordering::Less => lo = m + 1,
+                std::cmp::Ordering::Greater => hi = m,
+                std::cmp::Ordering::Equal => return Some(self.chars[m * 2 + 1]),
+            }
+        }
+        None
+    }
+
+    // 組 (左, 右) の結合の決まり → (順位, つないだ語の番号)
+    fn merge(&self, a: u32, b: u32) -> Option<(u32, u32)> {
+        let (mut lo, mut hi) = (0, self.merges.len() / 4);
+        while lo < hi {
+            let m = (lo + hi) / 2;
+            let r = &self.merges[m * 4..m * 4 + 4];
+            match (r[0], r[1]).cmp(&(a, b)) {
+                std::cmp::Ordering::Less => lo = m + 1,
+                std::cmp::Ordering::Greater => hi = m,
+                std::cmp::Ordering::Equal => return Some((r[2], r[3])),
+            }
+        }
+        None
+    }
+
+    // 特別な印を含まない文の 1 かたまり → 語の番号（out の後ろに足す）
+    fn piece(&self, text: &str, out: &mut Vec<u32>) {
+        let mut sym: Vec<u32> = Vec::with_capacity(text.len());
+        for c in text.chars() {
+            let c = if c == ' ' { '▁' } else { c };
+            match self.ch(c as u32) {
+                Some(id) => sym.push(id),
+                None => {
+                    let mut buf = [0u8; 4];
+                    sym.extend(c.encode_utf8(&mut buf).bytes().map(|x| self.bytes[x as usize]));
+                }
+            }
+        }
+        let n = sym.len();
+        // 隣の語（つないで消えた語を飛ばす）。-1 は無し
+        let mut prev: Vec<i32> = (0..n as i32).map(|i| i - 1).collect();
+        let mut next: Vec<i32> = (0..n as i32).map(|i| if i + 1 < n as i32 { i + 1 } else { -1 }).collect();
+        let mut alive = vec![true; n];
+        // 候補: (順位, 左の語の位置, つないだ語の番号)。小さい順に取り出す
+        let mut heap = std::collections::BinaryHeap::new();
+        for i in 0..n.saturating_sub(1) {
+            if let Some((rank, id)) = self.merge(sym[i], sym[i + 1]) {
+                heap.push(std::cmp::Reverse((rank, i as u32, id)));
+            }
+        }
+        while let Some(std::cmp::Reverse((_, pos, id))) = heap.pop() {
+            let pos = pos as usize;
+            if !alive[pos] || next[pos] < 0 {
+                continue;
+            }
+            let nx = next[pos] as usize;
+            // 古くなった候補（その位置の組が、もう同じ語にならない）は捨てる
+            if self.merge(sym[pos], sym[nx]).map(|x| x.1) != Some(id) {
+                continue;
+            }
+            sym[pos] = id;
+            alive[nx] = false;
+            next[pos] = next[nx];
+            if next[nx] >= 0 {
+                prev[next[nx] as usize] = pos as i32;
+            }
+            if prev[pos] >= 0 {
+                let p = prev[pos] as usize;
+                if let Some((rank, id)) = self.merge(sym[p], sym[pos]) {
+                    heap.push(std::cmp::Reverse((rank, p as u32, id)));
+                }
+            }
+            if next[pos] >= 0 {
+                if let Some((rank, id)) = self.merge(sym[pos], sym[next[pos] as usize]) {
+                    heap.push(std::cmp::Reverse((rank, pos as u32, id)));
+                }
+            }
+        }
+        out.extend((0..n).filter(|&i| alive[i]).map(|i| sym[i]));
+    }
+
+    // 文 → 頭と尻の印つきのトークンの番号（長い文は後ろを切って、全部で max_len まで）
+    pub fn encode(&self, text: &str, max_len: usize) -> Vec<u32> {
+        // ponytail: 文の全部を 1 つの語として結合するので、手間は文の長さ × log。使うのは頭の max_len トークンだけなので、ここで頭の 32 KB に切る
+        // （1 トークンは長くて 30 バイトほど。256 トークンぶんには十分で、切り口の近くの結合の違いは、使う範囲に届かない）
+        let mut cut = text.len().min(32 * 1024);
+        while !text.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        let text = &text[..cut];
+        let mut body = Vec::new();
+        let (mut seg, mut i) = (0, 0);
+        while i < text.len() {
+            let hit = self.special.iter().filter(|(p, _)| text[i..].starts_with(p.as_str())).max_by_key(|(p, _)| p.len());
+            if let Some((p, id)) = hit {
+                self.piece(&text[seg..i], &mut body);
+                body.push(*id);
+                i += p.len();
+                seg = i;
+            } else {
+                i += text[i..].chars().next().map_or(1, char::len_utf8);
+            }
+        }
+        self.piece(&text[seg..], &mut body);
+        let mut ids = Vec::with_capacity(body.len().min(max_len) + 2);
+        ids.push(self.bos);
+        ids.extend(body.into_iter().take(max_len.saturating_sub(2)));
+        ids.push(self.eos);
+        ids
+    }
+}
+
 pub struct Nfkc {
     dec_cp: &'static [u32],
     dec_off: &'static [u32],
