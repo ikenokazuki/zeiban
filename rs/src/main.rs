@@ -252,7 +252,7 @@ impl Model {
     fn from_bundle(b: &'static Bundle) -> Result<Self> {
         let num = |k: &str| b.man[k].as_u64().map(|x| x as usize).with_context(|| format!("目録の {k}"));
         let n_nodes: Vec<usize> = b.man["n_nodes"].as_array().context("目録の n_nodes")?.iter().map(|x| x.as_u64().unwrap_or(0) as usize).collect();
-        let g6 = b.man["enc"]["kind"] == "g6";
+        let g6 = matches!(b.man["enc"]["kind"].as_str(), Some("g6" | "g24m"));
         let m = Self {
             tok: tok::Tokenizer::new(b)?,
             nfkc: tok::Nfkc::new(b),

@@ -71,20 +71,62 @@ def unpack4_lin(b):
     return np.ascontiguousarray(unpack4(np.asarray(b).reshape(-1, 8)).reshape(n, i, 16).transpose(0, 2, 1)).reshape(n * 16, i)
 
 
-def g6_state(sec, layers):
-    """先頭 6 層の読み手（目録の enc.kind が g6）: 一式の int4 の重みを読んで、トークンの番号 → 状態 [768] を返す関数を作る。
-    計算: 語の表 × √512 → 層ごとの入力（射影 × 512^-0.5 → 512 ごとに RMSNorm）→ 層（RMSNorm → 注意 → RMSNorm → 足す → RMSNorm → 門つきの MLP → RMSNorm → 足す
-    → 層ごとの入力の足し込み → 層の倍率）→ RMSNorm → 射影（512 → 768）→ トークンの平均。注意は、問い 4 頭・問いと鍵に RMSNorm と回転の位置づけ・点の倍率 1。
-    最後の層だけ「頭の幅 512・鍵と値は 1 頭・θ = 1,000,000」、ほかは「頭の幅 256・鍵と値は 2 頭・θ = 10,000」。"""
+def unpack2_lin(b):
+    """線形の層の 2-bit block16 区画 [出力 ÷ 16, 入力, 4] → int8 [-3, -1, 1, 3] [出力, 入力]"""
+    b = np.asarray(b)
+    n, i, _ = b.shape
+    raw = b.reshape(-1, 4)
+    cols = [((raw >> (2 * r)) & 3).astype(np.int8) * 2 - 3 for r in range(4)]
+    u = np.stack(cols, axis=2).reshape(-1, 16)
+    return np.ascontiguousarray(u.reshape(n, i, 16).transpose(0, 2, 1)).reshape(n * 16, i)
+
+
+def unpack2_k128(b):
+    """線形の層の 2-bit k128 区画 [出力, 入力 ÷ 128, 32] → int8 [-3, -1, 1, 3] [出力, 入力]"""
+    b = np.asarray(b)
+    out, blk, _ = b.shape
+    parts = [((b >> (2 * s)) & 3).astype(np.int8) * 2 - 3 for s in range(4)]
+    return np.concatenate(parts, axis=2).reshape(out, blk * 128)
+
+
+def unpack4_k64(b):
+    """線形の層の 4-bit k64 区画 [出力, 入力 ÷ 64, 32] → int8 [-7..7] [出力, 入力]"""
+    b = np.asarray(b)
+    out, blk, _ = b.shape
+    lo = (b & 15).astype(np.int8) - 8
+    hi = (b >> 4).astype(np.int8) - 8
+    return np.concatenate((lo, hi), axis=2).reshape(out, blk * 64)
+
+
+def g6_state(sec, enc_meta):
+    """6 層 / 24 層混合 2/4-bit の読み手（enc.kind が g6 または g24m）: トークンの番号 → 状態 [768] を返す。"""
     import torch
     import torch.nn.functional as F
     H, HEADS = 512, 4
-    lin = lambda k: torch.from_numpy(unpack4_lin(sec(k)).astype(np.float32) * sec(k + '.s')[:, None])
+    layers = int(enc_meta['layers'])
+    wlayout = enc_meta.get('weight_layout', 'block16')
+    k128_all = (wlayout == 'k128_v1')
+    hybrid = (wlayout == 'hybrid_k128_v1')
+    layer_bits = enc_meta.get('layer_bits') or [int(enc_meta.get('bits', 4))] * layers
+    full_attn = set(enc_meta.get('full_attn_layers') or ([layers - 1] if layers else []))
+
+    def lin(k, bits=4, use_k128=False):
+        raw = sec(k)
+        if bits == 2:
+            arr = unpack2_k128(raw) if use_k128 else unpack2_lin(raw)
+        elif bits == 4:
+            arr = unpack4_k64(raw) if use_k128 else unpack4_lin(raw)
+        else:
+            raise ValueError(f'非対応ビット幅: {bits}')
+        return torch.from_numpy(arr.astype(np.float32) * sec(k + '.s')[:, None])
+
     vec = lambda k: torch.from_numpy(np.array(sec(k), np.float32))
     emb, emb_s = sec('g.emb'), sec('g.emb.s')
-    W = {'ple': lin('g.ple'), 'ple.norm': vec('g.ple.norm'), 'norm': vec('g.norm'), 'eproj': lin('g.eproj')}
+    W = {'ple': lin('g.ple', 4, k128_all), 'ple.norm': vec('g.ple.norm'), 'norm': vec('g.norm'), 'eproj': lin('g.eproj', 4, False)}
     for i in range(layers):
-        W.update({f'{i}.{k}': lin(f'g.l{i}.{k}') for k in ('q', 'k', 'v', 'o', 'gate', 'up', 'down', 'pg', 'pp')})
+        b = int(layer_bits[i])
+        uk = k128_all or (hybrid and b == 2)
+        W.update({f'{i}.{k}': lin(f'g.l{i}.{k}', b, uk) for k in ('q', 'k', 'v', 'o', 'gate', 'up', 'down', 'pg', 'pp')})
         W.update({f'{i}.{k}': vec(f'g.l{i}.{k}') for k in ('n_in', 'n_q', 'n_k', 'n_att', 'n_pre', 'n_ff', 'n_ple', 'scalar')})
     rms = lambda x, w=None: (lambda y: y if w is None else y * w)(x * torch.pow(x.pow(2).mean(-1, keepdim=True) + 1e-6, -0.5))
     gelu = lambda x: F.gelu(x, approximate='tanh')
@@ -100,7 +142,7 @@ def g6_state(sec, layers):
             x = torch.from_numpy(unpack4(emb[ids]).astype(np.float32) * emb_s[ids][:, None]) * (H ** 0.5)
             ple = rms(((x @ W['ple'].T) * H ** -0.5).view(n, layers, H), W['ple.norm'])
             for i in range(layers):
-                hd, kv, theta = (512, 1, 1e6) if i == layers - 1 else (256, 2, 1e4)
+                hd, kv, theta = (512, 1, 1e6) if i in full_attn else (256, 2, 1e4)
                 h = rms(x, W[f'{i}.n_in'])
                 q = rot(rms((h @ W[f'{i}.q'].T).view(n, HEADS, hd).transpose(0, 1), W[f'{i}.n_q']), n, hd, theta)
                 k = rot(rms((h @ W[f'{i}.k'].T).view(n, kv, hd).transpose(0, 1), W[f'{i}.n_k']), n, hd, theta).repeat_interleave(HEADS // kv, 0)
@@ -133,7 +175,7 @@ class Zeiban:
 
         self.n_nodes = man['n_nodes']
         self.offs = np.concatenate([[0], np.cumsum(self.n_nodes)])
-        g6 = man.get('enc') if (man.get('enc') or {}).get('kind') == 'g6' else None   # 先頭 6 層の読み手の一式（読み手は 1 つ。エンコーダのフォルダは要らない）
+        g6 = man.get('enc') if (man.get('enc') or {}).get('kind') in ('g6', 'g24m') else None   # g6 / g24m の読み手の一式（読み手は 1 つ。エンコーダのフォルダは要らない）
         if not g6 and encoder is None:
             raise ValueError('この一式には、エンコーダのフォルダが要る')
         encoder = None if g6 else Path(encoder)
@@ -156,7 +198,7 @@ class Zeiban:
 
         if g6:
             self.base = {'q_w': unpack4_lin(sec('g.q_proj')).astype(np.float32) * sec('g.q_proj.s')[:, None], 'q_b': sec('g.q_proj.b'), 'scale': sec('g.scale'), 'lam': sec('g.lam'),
-                         'state': g6_state(sec, g6['layers']), 'calib': man.get('calib'), 'calibPrefix': man.get('calibPrefix')}
+                         'state': g6_state(sec, g6), 'calib': man.get('calib'), 'calibPrefix': man.get('calibPrefix')}
             self.gtk, self.gid = Tokenizer.from_file(str(bundle / g6['tokenizer'])), sec('g.tok.id').astype(np.int64)      # 読み手の語の区切り（絞った語彙。番号はもとのまま）と、もとの番号 → 語の表の行
             self.gtk.no_padding()
             self.gtk.enable_truncation(max_length=man['q_len'])
@@ -305,6 +347,20 @@ def demo():
     assert build({'text': 'title: a', 'lex': 'a'}) == ('title: a', 'a') and build({'text': 'x'}) == ('x', 'x')
     assert lex_norm('Ｃｏｔｔｏｎ\tＴシャツ  100％') == ' cotton tシャツ 100%' and lex_norm('') == ' '
     assert is_ja('綿のTシャツ', 0.1) and is_ja('調製食料品', 0.1) and not is_ja('Cotton T-shirt', 0.1) and not is_ja('LED lamp for car 新品 12V 6000K waterproof bulb', 0.1) and not is_ja(' \u3000', 0.1)
+    # 2-bit k128 / 4-bit k64 / 2-bit block16 パック展開整合
+    rng = np.random.default_rng(0)
+    c2k = rng.choice(np.array([-3, -1, 1, 3], dtype=np.int8), size=(16, 256))
+    u2k = ((c2k.reshape(16, 2, 4, 32) + 3) >> 1).astype(np.uint8)
+    p2k = u2k[:, :, 0] | (u2k[:, :, 1] << 2) | (u2k[:, :, 2] << 4) | (u2k[:, :, 3] << 6)
+    assert np.array_equal(unpack2_k128(p2k), c2k)
+    c4k = rng.integers(-7, 8, (16, 128), dtype=np.int8)
+    u4k = (c4k.reshape(16, 2, 2, 32) + 8).astype(np.uint8)
+    p4k = u4k[:, :, 0] | (u4k[:, :, 1] << 4)
+    assert np.array_equal(unpack4_k64(p4k), c4k)
+    c2b = rng.choice(np.array([-3, -1, 1, 3], dtype=np.int8), size=(32, 12))
+    u2b = ((c2b.reshape(2, 16, 12).transpose(0, 2, 1) + 3) >> 1).astype(np.uint8)
+    p2b = np.stack([u2b[:, :, 4 * s] | (u2b[:, :, 4 * s + 1] << 2) | (u2b[:, :, 4 * s + 2] << 4) | (u2b[:, :, 4 * s + 3] << 6) for s in range(4)], axis=2)
+    assert np.array_equal(unpack2_lin(p2b), c2b)
     print('demo ok')
 
 

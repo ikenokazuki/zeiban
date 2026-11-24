@@ -12,6 +12,17 @@ A small model that predicts the 10-digit code of the US Harmonized Tariff Schedu
 
 This file is a shorter English version of the [Japanese README](README.md), which is the complete write-up (every table, every experiment that did not help).
 
+> **Pre-release: `v0.4.0-rc1` (Interim Preview)**
+>
+> While full `v0.4.0` retraining and the Stage-2 reranker are in progress, `v0.4.0-rc1` provides the **24-layer mixed 2/4-bit Stage-1 standalone bundle (`b32`, `avx2_int8_k64`)** on branch `v0.4.0-rc1`, GitHub Pre-release, and Hugging Face `revision="v0.4.0-rc1"`. Held-out sealed test splits are reserved for `v0.4.0`, so only development and calibration checks are reported here.
+>
+> - **Bundle & SHA-256 (`2026HTSRev22`)**: `zeiban.bin` `80,126,764` bytes (`80.1 MB`, sha256 `0f9f87623057465ff58b2eea96b1e84efbdbd8b87b2c397eaaa6e8ab12b55fc4`), `zeiban.json` `80,468` bytes (`c6bce1e00c4f36841b4b13f08198e8be53b64341197c3614904ec1971cf2ca40`), `zeiban.wasm` `489,171` bytes (`09db6b86c3138ec088345f4be050cc8a6911b5d6023800f043e669b6c6b2195a`).
+> - **Dev `holdout` (568 rows, Rust AVX2 int8, 2 threads)**: top-1 at 10 digits `0.4137 → 0.5070` (+9.3 pts), 6 digits `0.5352 → 0.6285`, top-5 at 10 digits `0.6585 → 0.7465`.
+> - **Calibration (5,884 non-training tune rows, CV ECE)**: ATLAS 6d `0.117 → 0.045` / 10d `0.062 → 0.046`, ruling rewrites 6d `0.069 → 0.023` / 10d `0.053 → 0.024`.
+> - **Speed & memory (2 CPU threads, AVX2 int8, 128 items)**: load `18.22 ms`, median `118.35 ms`, **p95 `439.15 ms`**, peak RSS (`VmHWM`) `115.71 MB` (without AVX2, `portable` median is `946.3 ms`, p95 `3152.65 ms`).
+> - **Runtime parity**: `ZEIBAN_FP32=1` matches `py/zeiban.py` `16/16` (max diff `5.9e-5`). Dynamic `int8` quantization across 24 layers can differ by `~0.2–0.3` in log-scores due to rounding ties (`AVX2 int8` vs Python `15/16` top-1, `Portable` vs `WASM` `8/8` top-1). Backward compatibility verified with `v0.3.0` (`8/8`) and `v0.2.1` (`4/4`).
+> - **Try it**: build from branch `v0.4.0-rc1` (`cargo build --release`), use `v0.4.0-rc1` in GitHub Pre-release URLs, or `snapshot_download("ikeno-ada/zeiban", revision="v0.4.0-rc1")`.
+>
 > **Read this first**
 >
 > - The top-1 10-digit code is not accurate enough to file a customs entry as is. On held-out test items, top-1 accuracy is 46% at 10 digits and 55% at 6 digits for ruling-like text, and 27% / 42% for short e-commerce titles. The intended use is to look at the 6-digit code and the confidence, and to narrow the 10 digits with the alternates and the question. With questions answered correctly, 10-digit accuracy on e-commerce titles reaches 66% within three questions.
