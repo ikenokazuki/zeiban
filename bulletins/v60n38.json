@@ -1,0 +1,32 @@
+{
+ "vol": 60,
+ "no": 38,
+ "date": "2026-11-25",
+ "page": "/document/bulletins/customs-bulletin-weekly-vol-60-november-25-2026-no-38",
+ "pdf": "/sites/default/files/2026-11/26_1125_bulletin_vol_60_no_38.pdf",
+ "pdf_sha256": "70239ad8c7c37a6f00f20e1393c1f4a8e91f3ae04e8731ac0ffa5b91a0117dff",
+ "notices": [
+  {
+   "kind": "final",
+   "acts": [
+    "revocation"
+   ],
+   "expected": 1,
+   "title": "REVOCATION OF ONE RULING LETTER AND REVOCATION OF TREATMENT RELATING TO THE COUNTRY OF ORIGIN OF OUTDOOR SPLIT AIR CONDITIONING UNITS",
+   "classification": false,
+   "effective": "2027-01-24",
+   "comments_by": "",
+   "rulings": [
+    {
+     "n": "NY N352477",
+     "act": "revoked",
+     "date": "2025-08-29"
+    }
+   ],
+   "new_rulings": [
+    "HQ H354597"
+   ],
+   "holding_codes": []
+  }
+ ]
+}
